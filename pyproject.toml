@@ -1,0 +1,31 @@
+[project]
+name = "chama"
+version = "0.1.0"
+description = "Loan default risk prediction for Kenyan Chama groups"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.2",
+    "openpyxl>=3.1",
+    "sqlalchemy>=2.0",
+    "psycopg2-binary>=2.9",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "pandera>=0.20",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6", "jupyter>=1.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100

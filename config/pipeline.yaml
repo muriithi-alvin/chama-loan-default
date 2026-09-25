@@ -1,0 +1,17 @@
+# Pipeline settings. Paths are relative to the project root.
+chamas:
+  - id: chama_a          # the first Chama (records from 2023)
+    raw_file: data/raw/chama_a.xlsx
+  - id: chama_b          # the second Chama (records from 2015)
+    raw_file: data/raw/chama_b.xlsx
+
+# Sheet names expected in each raw Excel workbook
+sheets:
+  loans: Loans
+  repayments: Repayments
+  contributions: Contributions
+  attendance: Attendance
+  notes: Notes
+
+# Chama rule: a loan falls due this many days after it is issued
+loan_term_days: 365

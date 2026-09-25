@@ -1,0 +1,37 @@
+# ---- Private data: NEVER commit ----
+data/photos/*
+data/raw/*
+data/interim/*
+data/processed/*
+!data/**/.gitkeep
+*.xlsx
+*.xls
+*.csv
+*.jpg
+*.jpeg
+*.png
+*.heic
+# ...except diagrams exported for the docs
+!docs/**/*.png
+
+# ---- Secrets ----
+.env
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ---- Tools (used later) ----
+mlruns/
+mlartifacts/
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
