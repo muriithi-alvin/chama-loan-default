@@ -10,3 +10,6 @@ labels: bug
 
 ### Steps to reproduce
 1. 
+
+### Remedy (fill in when closing)
+<!-- Short note on the fix, with the pull request number, e.g. "Fixed in #7: ..." -->
