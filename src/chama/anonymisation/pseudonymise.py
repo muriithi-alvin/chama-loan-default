@@ -32,7 +32,7 @@ def member_code(canonical_name: str, chama_id: str, key: bytes) -> str:
     The chama_id is included so two different people with the same name in
     different Chamas get different codes.
     """
-    message = f"{chama_id}|{normalise_name(canonical_name)}".encode("utf-8")
+    message = f"{chama_id}|{normalise_name(canonical_name)}".encode()
     digest = hmac.new(key, message, hashlib.sha256).hexdigest()
     return f"M-{digest[:CODE_LENGTH]}"
 
