@@ -1,0 +1,27 @@
+# dbt project: builds the clean tables in the `analytics` schema from `staging`.
+# Run it through the pipeline, which loads .env and config/pipeline.yaml:
+#   python -m chama.pipeline clean        build, test and report
+#   python -m chama.pipeline dbt <args>   any other dbt command, e.g. "dbt test"
+name: chama
+version: "1.0.0"
+profile: chama
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+clean-targets: ["target", "logs"]
+
+flags:
+  send_anonymous_usage_stats: false   # private data project: no usage tracking
+
+vars:
+  # The pipeline passes these from config/pipeline.yaml; these are fallbacks.
+  loan_term_days: 365          # a normal loan falls due this long after it is given
+  emergency_term_days: 31      # emergency loans are repaid at the next meeting
+  # Linking a ledger line to the same loan on an earlier page (loan_lines):
+  carry_tolerance: 0.10        # balances may differ by up to 10% (misreadings, interest)
+  max_pages_between_lines: 3   # a member may miss up to two meetings
+
+models:
+  chama:
+    +materialized: table

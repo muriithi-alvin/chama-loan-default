@@ -35,3 +35,8 @@ mlartifacts/
 .idea/
 Thumbs.db
 .DS_Store
+
+# ---- dbt (transform/) ----
+transform/target/
+transform/logs/
+transform/dbt_packages/

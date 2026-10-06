@@ -126,3 +126,31 @@ types.
 
 Every table also keeps `source_photo`, `unclear`, `chama_id`, `source_file` and
 `source_row`, so each value can be traced to its photo.
+
+# Analytics layer — schema `analytics`
+
+Built by `python -m chama.pipeline clean` (dbt project in `transform/`).
+Codes only, no names. Rows that cannot be read are kept, with the reasons in
+`issues` (comma separated); `unclear` repeats the flag typed from the ledger.
+Full column descriptions: `python -m chama.pipeline dbt docs generate`.
+
+| Table | One row per | Main columns |
+| --- | --- | --- |
+| `meetings` | ledger page (monthly meeting) | `meeting_month` (always filled), `meeting_date`, `date_source` (`written`, `previous_page`, `estimated`), footer amounts |
+| `statements` | member line on a page | `line_kind` (`balance`, `loan_given`, `repayment_only`, `empty`), `loan_before`, `repayment`, `interest_rate_pct` or `interest_amount`, `loan_after`, `closing_balance`, `due_month` |
+| `new_loans` | loan listed as given | `amount`, `loan_type` (`normal`, `emergency`, `school_fees`, `top_up`), `loan_month` |
+| `attendance` | member per meeting | `status` (`present`, `absent`, `apology`, `late`) |
+| `loan_lines` | statement line | `loan_id`, `line_seq`, `link` (`start`, `continued`, `continued_with_top_up`, `repayment_unlinked`, `not_a_loan`), `carry_difference`, `top_up_amount` |
+| `loans` | loan | `loan_type`, `issued_month` + `issue_source`, `due_month` + `due_source`, `cleared_month`, `outstanding_at_due`, `months_late`, `status` |
+| `quality_report` | measure per Chama and year | counts of rows, flagged rows, missing values, estimated dates, links, statuses |
+
+**How values are read.** Amounts: commas, spaces, `/=` and `Ksh` are dropped,
+`300k` is 300,000, sums such as `5500 + 776` are added, `-` and `nil` are 0.
+Dates are day first (`8/6/14` is 8 June 2014). A due month with no year
+(`Aug`) is the next August after the meeting. Interest with `%`, or a number up
+to 20, is a rate; a larger number is an amount.
+
+**Loan status.** `repaid_on_time`, `repaid_late` (cleared after the due month),
+`repaid` (no due month known), `overdue` (not cleared, due month passed),
+`open` (not yet due when the records end), `open_no_due_date`, `lost_track`
+(stops appearing while the records go on: check member names and the photos).

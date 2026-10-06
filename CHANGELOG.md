@@ -6,6 +6,31 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
 ## [Unreleased] — branch `m1-data-pipeline`
 
+### Added — cleaning, loans and data checks with dbt (issues #10, #11, #12)
+- dbt project `transform/` (decision D-009) building the `analytics` schema:
+  `meetings`, `statements`, `new_loans`, `attendance` with typed values and
+  an `issues` column for anything unreadable (#10); `loan_lines` and `loans`
+  rebuilding each loan from the ledger lines (decision D-010) with due month,
+  outstanding balance at the due month and a status (#11); `quality_report`
+  with counts per Chama and year (#12).
+- Every page gets a meeting month: written, from the previous page's "next
+  meeting" note, or estimated from the nearest dated page.
+- 33 dbt data tests (stop on structural problems, warn on ledger
+  inconsistencies such as a balance not carried forward) and 3 dbt unit tests
+  for the parsing, dating and linking rules.
+- `clean` step runs `dbt build`, then prints the quality report and saves it to
+  `data/processed/quality_report.csv`; `dbt` step runs any dbt command with
+  `.env` loaded. `chama/cleaning/transform.py`, `chama/validation/report.py`.
+- `emergency_term_days` in `config/pipeline.yaml`; `dbt-postgres` added to the
+  dependencies. Test for the report layout (43 pytest tests in total).
+
+### Found in the 2014 data
+- Written due months for normal loans are about 15 months after the loan was
+  given, not the 12 in `loan_term_days: 365`. To confirm with the Chama.
+- A member's page-2 line (46,000 -> 44,000) is under a separate member code
+  from the same balance on pages 1 and 3: likely one person, two spellings.
+
+
 ### Added — name matching and anonymisation (issues #8, #9)
 - `suggest-aliases` step (`anonymisation/aliases.py`): groups the different
   spellings of each member (initials, swapped order, spelling slips, a missing

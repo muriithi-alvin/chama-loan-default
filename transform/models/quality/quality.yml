@@ -1,0 +1,11 @@
+version: 2
+
+models:
+  - name: quality_report
+    description: >
+      Counts per Chama and year: rows, flagged rows, missing values, how dates
+      were found, how lines were linked and loan statuses. Printed and saved to
+      data/processed/quality_report.csv by `python -m chama.pipeline clean`.
+    columns:
+      - name: value
+        data_tests: [not_null]

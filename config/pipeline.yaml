@@ -9,5 +9,9 @@ chamas:
 
 # Sheet and column layout lives in src/chama/ingestion/raw_format.py
 
-# Chama rule: a loan falls due this many days after it is issued
+# Chama rule: a loan falls due this many days after it is issued.
+# Used only when the ledger has no due month for a loan (the written due month
+# wins). In 2014 the written due months are about 15 months after issue.
 loan_term_days: 365
+# Emergency loans are repaid at the next meeting
+emergency_term_days: 31
