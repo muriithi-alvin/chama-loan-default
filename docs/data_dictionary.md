@@ -88,3 +88,41 @@ This table is updated as each year is extracted.
    they appear.
 7. Rotated photos are read in their correct orientation; the photo file itself
    is never changed.
+
+---
+
+# Name review file — `data/interim/aliases_<chama>.csv`
+
+Written by `python -m chama.pipeline suggest-aliases`, checked by a person, and
+loaded with `load-aliases` into `private.member_aliases`. It holds real names,
+so it stays in `data/interim` on this computer.
+
+| Column | Meaning |
+| --- | --- |
+| `raw_name` | A spelling from the ledger, normalised (lower case, no dots or extra spaces) |
+| `canonical_name` | The member this spelling belongs to. **The only column to edit.** |
+| `status` | `check`: suggested as another spelling of `canonical_name` — confirm or correct. `new`: no close match, this is a member's own name. `reviewed`: loaded before. |
+| `score` | How alike the spelling and the member's name are (0–1) |
+| `similar_to` | For `new` rows: the closest other member and score, when they might be one person |
+| `occurrences` | How many rows use this spelling |
+| `first_photo` | First photo the spelling appears on, for checking against the page |
+
+To merge two members, give their rows the same `canonical_name`. To split a
+wrong match, type the right name in `canonical_name`.
+
+# Staging layer — schema `staging`
+
+Built by `python -m chama.pipeline anonymise`. Same tables as `raw`, with
+`member_name` replaced by `member_code` (e.g. `M-3f9a1c2b`) and **no free text**
+(decision D-008). Values are still text as written; the clean step gives them
+types.
+
+| Table | Columns kept from raw | Left in raw |
+| --- | --- | --- |
+| `statements` | `meeting_date`, `line_no`, `member_code`, `monthly`, `loan_before`, `repayment`, `interest`, `loan_after`, `due` | `remarks` |
+| `meetings` | `meeting_date`, `column_headers`, `contribution_total`, `brought_forward`, `total_collection`, `cash`, `banked`, `next_meeting_date` (date only) | `host`, `notes`, `next_meeting` |
+| `new_loans` | `loan_date`, `member_code`, `amount`, `loan_type` | `remarks` |
+| `attendance` | `meeting_date`, `member_code`, `status` | `remarks` |
+
+Every table also keeps `source_photo`, `unclear`, `chama_id`, `source_file` and
+`source_row`, so each value can be traced to its photo.

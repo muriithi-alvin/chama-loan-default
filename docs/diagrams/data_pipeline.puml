@@ -9,16 +9,17 @@ rectangle "Raw Excel\n(data/raw)" as excel
 package "PostgreSQL" {
   database "raw\n(as recorded,\nreal names)" as raw
   database "private\n(name -> code,\nrestricted)" as priv
-  database "staging\n(codes, typed)" as staging
+  database "staging\n(codes, values\nas written)" as staging
   database "analytics\n(clean + features)" as analytics
 }
 
 ledgers --> photos : photograph
 photos --> excel : extract\n(Claude + human check)
 excel --> raw : 1. ingest
-raw --> staging : 2. anonymise
+raw --> priv : 2. match names\n(human review)
+raw --> staging : 3. anonymise
 priv ..> staging : name -> code
-staging --> analytics : 3. validate & clean
+staging --> analytics : 4. validate & clean
 analytics --> [Model training\n(Milestone 2)] : features
 @enduml
 

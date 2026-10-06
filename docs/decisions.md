@@ -12,6 +12,7 @@ rejected. Newest last. Change a decision by adding a new one that replaces it.
 | D-005 | 2026-09-29 | Photos named by page order in one folder, not by year |
 | D-006 | 2026-09-29 | Raw Excel layout mirrors the ledger's meeting statements |
 | D-007 | 2026-10-01 | One long-lived branch per milestone plus `housekeeping` |
+| D-008 | 2026-10-06 | Free text stays in `raw`; staging gets structured columns and codes only |
 
 ---
 
@@ -81,3 +82,24 @@ only six branches to keep track of.
 **Consequences.** A pull request can close several issues at once. Before each
 round, run `git pull origin main` on the branch so it picks up work merged from
 the other branches. Replaces D-003.
+
+## D-008 Free text stays in raw
+**Context.** The free-text columns (`Statements.remarks`, `Meetings.host`,
+`Meetings.notes`, `Meetings.next_meeting`, `NewLoans.remarks`) mention people by
+name: hosts, members who brought cash, and people who are not members at all.
+Replacing names in free text with codes only works for names already on the
+member list, so some names would slip through.
+**Decision.** The anonymise step copies only structured columns to `staging`,
+with `member_name` replaced by `member_code`. Free-text columns stay in `raw`,
+for checking against the paper. From `next_meeting` only the date is kept
+(`next_meeting_date`), because early pages give no other date. Before saving,
+the step checks every staging column for words from members' names and stops
+if it finds any. Every spelling must have a reviewed alias in
+`private.member_aliases` first; the step stops rather than give an unreviewed
+spelling its own code.
+**Why.** D-001 promises that everything after anonymisation sees only codes.
+Leaving the text out is the only way to keep that promise.
+**Consequences.** Staging values are still text as written; the clean step
+gives them types. Anonymisation stays in Python, not dbt, because it needs the
+secret key from `.env` and a human review of name matches. SQL tools start at
+`staging`, which holds no names.
