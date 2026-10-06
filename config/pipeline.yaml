@@ -1,9 +1,11 @@
 # Pipeline settings. Paths are relative to the project root.
+# Each Chama has a folder of yearly Excel files (e.g. data/raw/chama_b/2014.xlsx).
+# The loader reads every .xlsx in the folder and combines them.
 chamas:
   - id: chama_a          # the first Chama (records from 2023)
-    raw_file: data/raw/chama_a.xlsx
-  - id: chama_b          # the second Chama (records from 2015)
-    raw_file: data/raw/chama_b.xlsx
+    raw_dir: data/raw/chama_a
+  - id: chama_b          # the second Chama (records from 2014)
+    raw_dir: data/raw/chama_b
 
 # Sheet and column layout lives in src/chama/ingestion/raw_format.py
 

@@ -21,3 +21,4 @@ priv ..> staging : name -> code
 staging --> analytics : 3. validate & clean
 analytics --> [Model training\n(Milestone 2)] : features
 @enduml
+

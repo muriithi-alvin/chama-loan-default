@@ -51,9 +51,9 @@ chama-loan-default/
 ## Setup (Windows, PowerShell)
 
 ```powershell
-# 1. Create and activate a virtual environment
-python -m venv .venv
-.venv\Scripts\Activate.ps1
+# 1. Create and activate the conda environment (Miniconda)
+conda create -n chama python=3.11 -y
+conda activate chama
 
 # 2. Install the project and dev tools
 pip install -e ".[dev]"
@@ -67,6 +67,28 @@ docker compose up -d
 # 5. Run the tests
 pytest
 ```
+
+## Raw data layout
+
+Ledger photos and the Excel files extracted from them stay on this computer only:
+
+```
+data/photos/chama_b/chama_b_p001.jpg        pages numbered in ledger order (+ photo_manifest.csv)
+data/raw/chama_b/2014.xlsx                  one Excel file per Chama per year
+```
+
+Each raw file has four sheets that mirror the ledger: **Statements**, **Meetings**,
+**NewLoans** and **Attendance**. Create an empty template with
+`python scripts/make_raw_template.py`.
+
+## Documentation
+
+- [CHANGELOG.md](CHANGELOG.md) — every change, newest first
+- [docs/decisions.md](docs/decisions.md) — design decisions and why
+- [docs/git_workflow.md](docs/git_workflow.md) — branches and how to push and merge
+- [docs/data_dictionary.md](docs/data_dictionary.md) — raw sheets, columns and extraction rules
+- [docs/extraction_log.md](docs/extraction_log.md) — what was extracted each year and what to check
+- [docs/diagrams/](docs/diagrams/) — PlantUML diagrams
 
 ## Running the pipeline
 

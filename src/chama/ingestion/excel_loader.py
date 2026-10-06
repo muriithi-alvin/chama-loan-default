@@ -1,8 +1,6 @@
 """Step 1 - Ingestion: copy the raw Excel sheets into the `raw` schema unchanged.
 
-Every value is kept as text, exactly as typed from the ledger photos.
-Cleaning and anonymisation happen in later steps, never here.
-"""
+Every value is kept as text, exactly as typed from the ledger photos."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -89,16 +87,45 @@ def load_to_raw(frames: dict[str, pd.DataFrame], engine, chama_id: str, source_f
             )
 
 
+def raw_files(folder: Path) -> list[Path]:
+    """Yearly Excel files in a Chama's folder, in name order.
+
+    Skips Excel's temporary '~$' files and the empty template.
+    """
+    if not folder.is_dir():
+        return []
+    return sorted(
+        p
+        for p in folder.glob("*.xlsx")
+        if not p.name.startswith("~$") and p.stem != "raw_template"
+    )
+
+
+def read_folder(folder: Path, chama_id: str) -> tuple[dict[str, pd.DataFrame], list[str]]:
+    """Read every yearly file for one Chama and combine them table by table."""
+    parts: dict[str, list[pd.DataFrame]] = {}
+    messages: list[str] = []
+    for path in raw_files(folder):
+        frames, reports = read_workbook(path, chama_id)
+        for r in reports:
+            if not r.skipped:
+                messages.append(f"{path.name} | {r.summary()}")
+        for table, df in frames.items():
+            parts.setdefault(table, []).append(df)
+    combined = {t: pd.concat(dfs, ignore_index=True) for t, dfs in parts.items()}
+    return combined, messages
+
+
 def run(config: dict, engine) -> None:
     for chama in config["chamas"]:
-        path = PROJECT_ROOT / chama["raw_file"]
-        if not path.exists():
-            print(f"[{chama['id']}] {path.name} not found - skipped")
+        folder = PROJECT_ROOT / chama["raw_dir"]
+        frames, messages = read_folder(folder, chama["id"])
+        if not frames:
+            print(f"[{chama['id']}] no Excel files in {chama['raw_dir']} - skipped")
             continue
-        frames, reports = read_workbook(path, chama["id"])
-        for r in reports:
-            print(f"[{chama['id']}] {r.summary()}")
-        if any(r.missing_columns for r in reports):
-            print(f"[{chama['id']}] WARNING: missing columns were added as empty - check the Excel file")
-        load_to_raw(frames, engine, chama["id"], path.name)
+        for m in messages:
+            print(f"[{chama['id']}] {m}")
+        if any("MISSING" in m for m in messages):
+            print(f"[{chama['id']}] WARNING: missing columns were added as empty - check the files")
+        load_to_raw(frames, engine, chama["id"], chama["raw_dir"])
         print(f"[{chama['id']}] loaded into raw schema")

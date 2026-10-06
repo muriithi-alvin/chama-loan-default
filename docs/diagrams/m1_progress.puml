@@ -1,0 +1,32 @@
+@startuml m1_progress
+title Chama data pipeline - Milestone 1 progress (1 Oct 2026)
+skinparam componentStyle rectangle
+skinparam shadowing false
+
+rectangle "Paper ledgers\n& minutes" as ledgers
+rectangle "Photos\nChama B: 149 pages\n(2014 - Apr 2026)" as photos #palegreen
+rectangle "Raw Excel\n2014 extracted: 12 of 149 pages\n167 statement rows, 22 loans\n30 rows flagged unclear" as excel #khaki
+
+package "PostgreSQL (Docker)" {
+  database "raw\n(as recorded,\nreal names)" as raw #palegreen
+  database "private\n(name -> code,\nrestricted)" as priv #khaki
+  database "staging\n(codes, typed)" as staging #lightgray
+  database "analytics\n(clean + features)" as analytics #lightgray
+}
+
+rectangle "Model training\n(Milestone 2)" as model
+
+ledgers --> photos : photograph
+photos --> excel : extract\n(Claude + human check)
+excel --> raw : 1. ingest\n<b>built, 8 tests</b>
+raw --> staging : 2. anonymise\n<i>HMAC codes built, 7 tests;</i>\n<i>not wired into pipeline yet</i>
+priv ..> staging : name -> code
+staging --> analytics : 3. validate & clean\n<i>not started</i>
+analytics --> model : features
+
+legend right
+  |<#palegreen> Done |
+  |<#khaki> In progress |
+  |<#lightgray> Not started |
+endlegend
+@enduml
