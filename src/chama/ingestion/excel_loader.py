@@ -1,46 +1,82 @@
 """Step 1 - Ingestion: copy the raw Excel sheets into the `raw` schema unchanged.
 
-Every value is kept as text, exactly as typed from the ledger photos.
-Cleaning and anonymisation happen in later steps, never here.
-"""
+Every value is kept as text, exactly as typed from the ledger photos."""
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
 
 from chama.config import PROJECT_ROOT
+from chama.ingestion.raw_format import expected_columns, sheet_names
 
 
-def read_workbook(path: Path, sheets: dict[str, str], chama_id: str) -> dict[str, pd.DataFrame]:
-    """Read the expected sheets as text. Missing sheets are skipped with a message."""
+@dataclass
+class SheetReport:
+    """What was found in one sheet, so problems are visible before loading."""
+
+    table: str
+    rows: int = 0
+    missing_columns: list[str] = field(default_factory=list)
+    extra_columns: list[str] = field(default_factory=list)
+    skipped: bool = False
+
+    def summary(self) -> str:
+        if self.skipped:
+            return f"{self.table}: sheet not found - skipped"
+        text = f"{self.table}: {self.rows} rows"
+        if self.missing_columns:
+            text += f" | MISSING columns: {', '.join(self.missing_columns)}"
+        if self.extra_columns:
+            text += f" | unexpected columns: {', '.join(self.extra_columns)}"
+        return text
+
+
+def _tidy_column(name) -> str:
+    return str(name).strip().lower().replace(" ", "_")
+
+
+def read_workbook(path: Path, chama_id: str) -> tuple[dict[str, pd.DataFrame], list[SheetReport]]:
+    """Read the expected sheets as text and report on their columns."""
     available = pd.ExcelFile(path).sheet_names
     frames: dict[str, pd.DataFrame] = {}
-    for table, sheet in sheets.items():
+    reports: list[SheetReport] = []
+    for table, sheet in sheet_names().items():
+        report = SheetReport(table)
+        reports.append(report)
         if sheet not in available:
-            print(f"[{chama_id}] sheet '{sheet}' not found - skipped")
+            report.skipped = True
             continue
         df = pd.read_excel(path, sheet_name=sheet, dtype=str)
-        df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
+        df.columns = [_tidy_column(c) for c in df.columns]
+        df = df.dropna(how="all")  # ignore completely empty rows
+
+        expected = expected_columns(table)
+        report.missing_columns = [c for c in expected if c not in df.columns]
+        report.extra_columns = [c for c in df.columns if c not in expected]
+        for col in report.missing_columns:  # keep every table's shape the same
+            df[col] = None
+        report.rows = len(df)
+
         df["chama_id"] = chama_id
         df["source_file"] = path.name
-        df["source_row"] = range(2, len(df) + 2)  # matches the Excel row number
+        df["source_row"] = [int(i) + 2 for i in df.index]  # the Excel row number
         df["loaded_at"] = datetime.now(timezone.utc)
         frames[table] = df
-    return frames
+    return frames, reports
 
 
 def load_to_raw(frames: dict[str, pd.DataFrame], engine, chama_id: str, source_file: str) -> None:
     """Replace this Chama's rows in raw.<table> and log the load."""
     from sqlalchemy import text
 
+    from chama.db import table_exists
+
     with engine.begin() as conn:
         for table, df in frames.items():
-            exists = conn.execute(
-                text("SELECT to_regclass(:t)"), {"t": f"raw.{table}"}
-            ).scalar()
-            if exists:
+            if table_exists(conn, f"raw.{table}"):
                 conn.execute(text(f"DELETE FROM raw.{table} WHERE chama_id = :c"), {"c": chama_id})
             df.to_sql(table, conn, schema="raw", if_exists="append", index=False)
             conn.execute(
@@ -50,14 +86,47 @@ def load_to_raw(frames: dict[str, pd.DataFrame], engine, chama_id: str, source_f
                 ),
                 {"c": chama_id, "f": source_file, "s": table, "n": len(df)},
             )
-            print(f"[{chama_id}] raw.{table}: {len(df)} rows")
+
+
+def raw_files(folder: Path) -> list[Path]:
+    """Yearly Excel files in a Chama's folder, in name order.
+
+    Skips Excel's temporary '~$' files and the empty template.
+    """
+    if not folder.is_dir():
+        return []
+    return sorted(
+        p
+        for p in folder.glob("*.xlsx")
+        if not p.name.startswith("~$") and p.stem != "raw_template"
+    )
+
+
+def read_folder(folder: Path, chama_id: str) -> tuple[dict[str, pd.DataFrame], list[str]]:
+    """Read every yearly file for one Chama and combine them table by table."""
+    parts: dict[str, list[pd.DataFrame]] = {}
+    messages: list[str] = []
+    for path in raw_files(folder):
+        frames, reports = read_workbook(path, chama_id)
+        for r in reports:
+            if not r.skipped:
+                messages.append(f"{path.name} | {r.summary()}")
+        for table, df in frames.items():
+            parts.setdefault(table, []).append(df)
+    combined = {t: pd.concat(dfs, ignore_index=True) for t, dfs in parts.items()}
+    return combined, messages
 
 
 def run(config: dict, engine) -> None:
     for chama in config["chamas"]:
-        path = PROJECT_ROOT / chama["raw_file"]
-        if not path.exists():
-            print(f"[{chama['id']}] {path.name} not found - skipped")
+        folder = PROJECT_ROOT / chama["raw_dir"]
+        frames, messages = read_folder(folder, chama["id"])
+        if not frames:
+            print(f"[{chama['id']}] no Excel files in {chama['raw_dir']} - skipped")
             continue
-        frames = read_workbook(path, config["sheets"], chama["id"])
-        load_to_raw(frames, engine, chama["id"], path.name)
+        for m in messages:
+            print(f"[{chama['id']}] {m}")
+        if any("MISSING" in m for m in messages):
+            print(f"[{chama['id']}] WARNING: missing columns were added as empty - check the files")
+        load_to_raw(frames, engine, chama["id"], chama["raw_dir"])
+        print(f"[{chama['id']}] loaded into raw schema")
