@@ -4,7 +4,29 @@ All notable changes to this project are recorded here, newest first.
 Each entry links to its issue or pull request where one exists.
 Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
-## [Unreleased] — branch `feature/5-raw-format-and-loader`
+## [Unreleased] — branch `m1-data-pipeline`
+
+### Added — name matching and anonymisation (issues #8, #9)
+- `suggest-aliases` step (`anonymisation/aliases.py`): groups the different
+  spellings of each member (initials, swapped order, spelling slips, a missing
+  name) and writes a review file `data/interim/aliases_<chama>.csv` with a
+  suggested `canonical_name`, a `status` (`new`, `check`, `reviewed`), a match
+  score, and `similar_to` for new members whose name is close to another's.
+  It will not overwrite a review file that has not been loaded yet.
+- `load-aliases` step: loads the reviewed file into `private.member_aliases`;
+  stops on rows with no name or one spelling given two names.
+- `anonymise` step (`anonymisation/anonymise.py`): copies raw to `staging` with
+  `member_code` instead of `member_name`, fills `private.member_codes`, leaves
+  free text in `raw` (decision D-008) and stops if any member's name is found
+  in staging or any spelling has not been reviewed.
+- Pipeline command line rebuilt with **click**: `python -m chama.pipeline --help`.
+- `table_exists()` helper in `db.py`; `StepFailed` for planned stops with a
+  short message instead of a traceback.
+- Tests for name matching (13) and anonymisation (14); 42 in total.
+
+### Changed — name matching and anonymisation
+- `private.member_aliases.raw_name` holds the normalised spelling.
+- `click` added to the dependencies (`pip install -e ".[dev]"` again).
 
 ### Changed
 - **Raw Excel layout now mirrors the ledger** (decision D-006). The sheets are

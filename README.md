@@ -92,6 +92,21 @@ Each raw file has four sheets that mirror the ledger: **Statements**, **Meetings
 
 ## Running the pipeline
 
+Inside the `chama` conda environment, with Postgres running (`docker compose up -d`):
+
 ```powershell
+# 1. Copy the raw Excel files into the raw schema, exactly as written
 python -m chama.pipeline ingest
+
+# 2. Suggest which name spellings are the same member.
+#    Writes data/interim/aliases_<chama>.csv: check canonical_name, correct it, save.
+python -m chama.pipeline suggest-aliases
+
+#    Load the reviewed file into private.member_aliases
+python -m chama.pipeline load-aliases
+
+# 3. Copy raw to staging with member codes instead of names
+python -m chama.pipeline anonymise
 ```
+
+`python -m chama.pipeline --help` lists every step.

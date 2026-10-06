@@ -7,6 +7,8 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
+from chama import StepFailed
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -28,5 +30,5 @@ def database_url() -> str:
 def pseudonym_key() -> bytes:
     key = os.getenv("PSEUDONYM_KEY", "")
     if not key:
-        raise RuntimeError("PSEUDONYM_KEY is missing from .env")
+        raise StepFailed("PSEUDONYM_KEY is missing from .env")
     return key.encode("utf-8")
