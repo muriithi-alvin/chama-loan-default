@@ -13,6 +13,8 @@ rejected. Newest last. Change a decision by adding a new one that replaces it.
 | D-006 | 2026-09-29 | Raw Excel layout mirrors the ledger's meeting statements |
 | D-007 | 2026-10-01 | One long-lived branch per milestone plus `housekeeping` |
 | D-008 | 2026-10-06 | Free text stays in `raw`; staging gets structured columns and codes only |
+| D-009 | 2026-10-06 | dbt builds the analytics layer and runs the data checks |
+| D-010 | 2026-10-06 | Loans are rebuilt by chaining ledger lines on balance |
 
 ---
 
@@ -103,3 +105,39 @@ Leaving the text out is the only way to keep that promise.
 gives them types. Anonymisation stays in Python, not dbt, because it needs the
 secret key from `.env` and a human review of name matches. SQL tools start at
 `staging`, which holds no names.
+
+## D-009 dbt for the analytics layer
+**Decision.** Cleaning (#10), linking lines into loans (#11) and the data
+checks (#12) are a dbt project in `transform/`, reading `staging` and writing
+`analytics`. Checks are dbt tests: structural ones (unique ids, every page
+dated, known statuses) stop the pipeline; ledger inconsistencies (a balance not
+carried forward exactly) only warn, because the data must stay as written.
+dbt unit tests check the parsing and linking rules on made-up rows.
+**Why.** The project follows the Data Engineering Zoomcamp, which uses dbt for
+transformations and data tests. This replaces the pandera checks planned in
+issue #12; one tool now does both. `analytics` holds codes only, so SQL tools
+never see names (D-008).
+**Consequences.** dbt is run through `python -m chama.pipeline clean` (or
+`... dbt <command>`), which loads `.env` and passes the loan rules from
+`config/pipeline.yaml`. dbt's anonymous usage tracking is switched off.
+
+## D-010 Loans rebuilt from ledger lines
+**Context.** The ledger has no loan numbers. Each page lists a member's balance
+before, repayment, balance after and due month; a member can have a normal and
+an emergency loan at once, and top-ups are added to running balances.
+**Decision.** A line continues an earlier line of the same member (up to three
+pages back) when its balance before matches that line's closing balance, or
+that balance plus a loan listed for the member at that meeting (a top-up),
+within 10%. The nearest page wins, then the closest balance; each line
+continues at most one other. Unmatched lines start a new loan. The due month
+is the one written in the ledger; `loan_term_days` (and `emergency_term_days`)
+only fill in when none is written. Loans already running on the first page are
+marked `before_records`.
+**Why.** Balance continuity is how a person reads the ledger, and it survives
+spelling and heading changes. Written due months reflect what the Chama agreed
+for each loan.
+**Consequences.** Linking depends on correct member codes: two spellings of
+one person left as two members break a loan's chain (seen as `lost_track` or a
+carried-balance warning). In 2014 the written due month is about 15 months after
+a normal loan is given, not 12 as `loan_term_days: 365` suggests; to be
+confirmed with the Chama.

@@ -9,9 +9,9 @@ rectangle "Raw Excel\n2014 extracted: 12 of 149 pages\n167 statement rows, 22 lo
 
 package "PostgreSQL (Docker)" {
   database "raw\n(as recorded,\nreal names)" as raw #palegreen
-  database "private\n(name -> code,\nrestricted)" as priv #khaki
-  database "staging\n(codes, values\nas written)" as staging #khaki
-  database "analytics\n(clean + features)" as analytics #lightgray
+  database "private\n(name -> code,\nrestricted)" as priv #palegreen
+  database "staging\n(codes, values\nas written)" as staging #palegreen
+  database "analytics\n(clean tables, loans,\nquality report)" as analytics #palegreen
 }
 
 rectangle "Model training\n(Milestone 2)" as model
@@ -19,10 +19,10 @@ rectangle "Model training\n(Milestone 2)" as model
 ledgers --> photos : photograph
 photos --> excel : extract\n(Claude + human check)
 excel --> raw : 1. ingest\n<b>built, 8 tests</b>
-raw --> priv : 2. match names\n<b>built, 13 tests</b>\n<i>2014: 22 spellings -> 14 members,</i>\n<i>waiting for review</i>
-raw --> staging : 3. anonymise\n<b>built, 21 tests</b>\n<i>runs once names are reviewed</i>
+raw --> priv : 2. match names\n<b>built, 13 tests</b>\n<i>2014: 22 spellings -> 14 members</i>
+raw --> staging : 3. anonymise\n<b>built, 21 tests</b>
 priv ..> staging : name -> code
-staging --> analytics : 4. validate & clean\n<i>not started</i>
+staging --> analytics : 4. clean, link loans, check (dbt)\n<b>built, 33 data + 3 unit tests</b>\n<i>2014: 47 loans, 1 warning</i>
 analytics --> model : features
 
 legend right
