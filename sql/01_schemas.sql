@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS raw.load_log (
 -- Filled by the matching step; reviewed by hand.
 CREATE TABLE IF NOT EXISTS private.member_aliases (
     chama_id       TEXT NOT NULL,
-    raw_name       TEXT NOT NULL,   -- as written in the ledger, e.g. "J. Kamau"
+    raw_name       TEXT NOT NULL,   -- spelling from the ledger, normalised: "J. Kamau" -> "j kamau"
     canonical_name TEXT NOT NULL,   -- the agreed full name, e.g. "John Kamau"
     PRIMARY KEY (chama_id, raw_name)
 );
