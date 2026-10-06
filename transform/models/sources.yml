@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: staging
+    description: >
+      Built by `python -m chama.pipeline anonymise`: the raw ledger tables with
+      member codes instead of names and no free text (decision D-008). Values
+      are still text, exactly as written.
+    schema: staging
+    tables:
+      - name: statements
+      - name: meetings
+      - name: new_loans
+      - name: attendance

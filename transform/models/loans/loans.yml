@@ -1,0 +1,93 @@
+version: 2
+
+models:
+  - name: loan_lines
+    description: >
+      Every statement line tied to its loan. The ledger has no loan numbers, so
+      lines are chained by balance: a line continues the same member's line on
+      a recent page when the balances match (see the model for the rules).
+    columns:
+      - name: line_id
+        data_tests: [unique, not_null]
+      - name: loan_id
+        description: chama_id-p<first page>-<line on that page>; empty for lines that are not loans
+      - name: link
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [start, continued, continued_with_top_up, repayment_unlinked, not_a_loan]
+      - name: carry_difference
+        description: Difference between this line's balance before and the balance carried from the line it continues
+      - name: top_up_amount
+        description: Loan given at the earlier meeting and added to this balance
+
+  - name: loans
+    description: >
+      One row per loan: when it was given, its due month, what was repaid, the
+      balance outstanding at the due month and a status. This is the basis for
+      the default label in Milestone 2.
+    columns:
+      - name: loan_id
+        data_tests: [unique, not_null]
+      - name: member_code
+        data_tests: [not_null]
+      - name: loan_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [normal, emergency, school_fees]
+      - name: issue_source
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [loan_given_line, before_records, new_loans_list, estimated]
+      - name: due_source
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [ledger, ledger_year_inferred, rule]
+      - name: rule_due_month
+        description: Due month by the loan_term_days rule, for comparing with the ledger
+      - name: outstanding_at_due
+        description: Balance at the due month; 0 if repaid by then; empty if the due month is after the records end
+      - name: status
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [repaid_on_time, repaid_late, repaid, overdue, open, open_no_due_date, lost_track]
+
+unit_tests:
+  - name: lines_are_chained_into_loans
+    description: >
+      A loan repaid over pages 1-3 with a top-up, a missed meeting (page 4) and
+      a separate emergency loan; plus a repayment with no balance.
+    model: loan_lines
+    given:
+      - input: ref('statements')
+        rows:
+          - {line_id: a, chama_id: c, member_code: M-1, page_no: 1, line_on_page: 1, line_kind: balance,
+             loan_before: 30000, repayment: 5300, closing_balance: 25000}
+          - {line_id: b, chama_id: c, member_code: M-1, page_no: 2, line_on_page: 1, line_kind: balance,
+             loan_before: 25000, repayment: 5250, closing_balance: 20000}
+          - {line_id: e, chama_id: c, member_code: M-1, page_no: 2, line_on_page: 2, line_kind: balance,
+             loan_before: 5000, repayment: 5250, closing_balance: 0}
+          - {line_id: t, chama_id: c, member_code: M-1, page_no: 3, line_on_page: 1, line_kind: balance,
+             loan_before: 30000, repayment: 2000, closing_balance: 28300}
+          - {line_id: g, chama_id: c, member_code: M-1, page_no: 5, line_on_page: 1, line_kind: balance,
+             loan_before: 28600, repayment: 600, closing_balance: 28000}
+          - {line_id: r, chama_id: c, member_code: M-2, page_no: 1, line_on_page: 2, line_kind: repayment_only,
+             repayment: 3300}
+      - input: ref('new_loans')
+        rows:
+          - {chama_id: c, member_code: M-1, page_no: 2, amount: 10000}
+    expect:
+      rows:
+        - {line_id: a, loan_id: c-p001-1, line_seq: 1, link: start, carry_difference: null, top_up_amount: null}
+        - {line_id: b, loan_id: c-p001-1, line_seq: 2, link: continued, carry_difference: 0, top_up_amount: null}
+        - {line_id: e, loan_id: c-p002-2, line_seq: 1, link: start, carry_difference: null, top_up_amount: null}
+        - {line_id: t, loan_id: c-p001-1, line_seq: 3, link: continued_with_top_up, carry_difference: 0,
+           top_up_amount: 10000}
+        - {line_id: g, loan_id: c-p001-1, line_seq: 4, link: continued, carry_difference: 300, top_up_amount: null}
+        - {line_id: r, loan_id: null, line_seq: null, link: repayment_unlinked, carry_difference: null,
+           top_up_amount: null}
