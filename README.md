@@ -32,10 +32,11 @@ chama-loan-default/
 ├── sql/               Database schema (runs automatically in Docker)
 ├── src/chama/         The pipeline code
 │   ├── ingestion/     Step 1: Excel -> raw tables
-│   ├── anonymisation/ Step 2: names -> member codes
-│   ├── validation/    Data quality checks
-│   ├── cleaning/      Step 3: types, dates, amounts
+│   ├── anonymisation/ Steps 2-3: name matching, names -> member codes
+│   ├── cleaning/      Step 4: runs the dbt project in transform/
+│   ├── validation/    Data quality report
 │   └── features/      Indicators for modelling (M2)
+├── transform/         dbt project: staging -> analytics (clean tables, loans, checks)
 └── tests/             Automated tests (pytest)
 ```
 
@@ -107,6 +108,12 @@ python -m chama.pipeline load-aliases
 
 # 3. Copy raw to staging with member codes instead of names
 python -m chama.pipeline anonymise
+
+# 4. Build the clean tables and loans with dbt, run the data checks and
+#    print the quality report (also saved to data/processed/quality_report.csv)
+python -m chama.pipeline clean
 ```
 
-`python -m chama.pipeline --help` lists every step.
+`python -m chama.pipeline --help` lists every step. Any other dbt command runs
+through the pipeline so it picks up `.env`, for example
+`python -m chama.pipeline dbt test` or `python -m chama.pipeline dbt run --select loans`.

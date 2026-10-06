@@ -5,7 +5,8 @@ Usage:
     python -m chama.pipeline suggest-aliases   # 2. name spellings -> review file
     python -m chama.pipeline load-aliases      #    reviewed file -> private.member_aliases
     python -m chama.pipeline anonymise         # 3. raw -> staging, names -> codes
-    python -m chama.pipeline clean             # 4. types and fixes (next)
+    python -m chama.pipeline clean             # 4. staging -> analytics with dbt, checks, report
+    python -m chama.pipeline dbt <args>        #    any dbt command, e.g. "dbt test"
 
 Add --help after any step for details.
 """
@@ -72,8 +73,36 @@ def anonymise() -> None:
 
 @cli.command()
 def clean() -> None:
-    """Give dates, amounts and statuses proper types (not built yet)."""
-    click.echo("Step 'clean' is not built yet - see the GitHub issues.")
+    """Build the clean tables and loans with dbt, run the checks, report.
+
+    Stops with a message if a check fails; otherwise prints the data quality
+    report and saves it to data/processed/quality_report.csv.
+    """
+    from chama.cleaning.transform import run_dbt
+    from chama.validation.report import run as report
+
+    def step() -> None:
+        run_dbt(["build"], load_config())
+        report(get_engine())
+
+    _run(step)
+
+
+@cli.command(
+    "dbt",
+    context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+)
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+def dbt_command(args: tuple[str, ...]) -> None:
+    """Run any dbt command on transform/ with the settings from .env.
+
+    Examples: dbt test, dbt run --select loans, dbt docs generate
+    """
+    from chama.cleaning.transform import run_dbt
+
+    if not args:
+        raise click.UsageError("Give a dbt command, e.g. python -m chama.pipeline dbt test")
+    _run(lambda: run_dbt(list(args), load_config()))
 
 
 if __name__ == "__main__":
