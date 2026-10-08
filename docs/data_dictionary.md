@@ -101,7 +101,7 @@ so it stays in `data/interim` on this computer.
 | --- | --- |
 | `raw_name` | A spelling from the ledger, normalised (lower case, no dots or extra spaces) |
 | `canonical_name` | The member this spelling belongs to. **The only column to edit.** |
-| `status` | `check`: suggested as another spelling of `canonical_name` — confirm or correct. `new`: no close match, this is a member's own name. `reviewed`: loaded before. |
+| `status` | `check`: suggested as another spelling of `canonical_name` — confirm or correct. `new`: no close match, this is a member's own name. `reviewed`: checked and loaded (`load-aliases` marks every row reviewed). |
 | `score` | How alike the spelling and the member's name are (0–1) |
 | `similar_to` | For `new` rows: the closest other member and score, when they might be one person |
 | `occurrences` | How many rows use this spelling |
@@ -109,6 +109,10 @@ so it stays in `data/interim` on this computer.
 
 To merge two members, give their rows the same `canonical_name`. To split a
 wrong match, type the right name in `canonical_name`.
+
+Keep these files: rows marked `reviewed` are the record of the review, and
+`python -m chama.pipeline all` restores them into a rebuilt database. Rows
+not yet reviewed are never loaded automatically.
 
 # Staging layer — schema `staging`
 

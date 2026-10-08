@@ -1,10 +1,11 @@
 @startuml data_pipeline
-title Chama data pipeline (Milestone 1)
+title Chama data pipeline (Milestone 1)\npython -m chama.pipeline all  runs steps 0-4
 skinparam componentStyle rectangle
 
 rectangle "Paper ledgers\n& minutes" as ledgers
 rectangle "Photos\n(data/photos)" as photos
 rectangle "Raw Excel\n(data/raw)" as excel
+rectangle "Name review file\n(data/interim/aliases_<chama>.csv)\nchecked by a person" as review
 
 package "PostgreSQL" {
   database "raw\n(as recorded,\nreal names)" as raw
@@ -13,13 +14,15 @@ package "PostgreSQL" {
   database "analytics\n(clean tables, loans,\nquality report)" as analytics
 }
 
+note top of raw : 0. schemas\n(sql/*.sql)
+
 ledgers --> photos : photograph
 photos --> excel : extract\n(Claude + human check)
 excel --> raw : 1. ingest
-raw --> priv : 2. match names\n(human review)
+raw --> review : 2. suggest-aliases\n(only when new spellings)
+review --> priv : load-aliases\n(or restored by all)
 raw --> staging : 3. anonymise
 priv ..> staging : name -> code
-staging --> analytics : 4. clean, link loans, check\n(dbt: transform/)
+staging --> analytics : 4. clean: dbt build,\nchecks, report\n(transform/)
 analytics --> [Model training\n(Milestone 2)] : features
 @enduml
-

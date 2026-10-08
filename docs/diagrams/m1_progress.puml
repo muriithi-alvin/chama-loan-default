@@ -1,5 +1,5 @@
 @startuml m1_progress
-title Chama data pipeline - Milestone 1 progress (6 Oct 2026)
+title Chama data pipeline - Milestone 1 progress (6 Oct 2026)\nAll steps built; runs end to end with  python -m chama.pipeline all
 skinparam componentStyle rectangle
 skinparam shadowing false
 
@@ -17,9 +17,9 @@ package "PostgreSQL (Docker)" {
 rectangle "Model training\n(Milestone 2)" as model
 
 ledgers --> photos : photograph
-photos --> excel : extract\n(Claude + human check)
+photos --> excel : extract\n(Claude + human check)\n<i>2015 - 2026 still to extract</i>
 excel --> raw : 1. ingest\n<b>built, 8 tests</b>
-raw --> priv : 2. match names\n<b>built, 13 tests</b>\n<i>2014: 22 spellings -> 14 members</i>
+raw --> priv : 2. match names\n<b>built, 15 tests</b>\n<i>2014: 22 spellings -> 14 members</i>
 raw --> staging : 3. anonymise\n<b>built, 21 tests</b>
 priv ..> staging : name -> code
 staging --> analytics : 4. clean, link loans, check (dbt)\n<b>built, 33 data + 3 unit tests</b>\n<i>2014: 47 loans, 1 warning</i>

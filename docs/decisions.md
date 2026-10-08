@@ -15,6 +15,7 @@ rejected. Newest last. Change a decision by adding a new one that replaces it.
 | D-008 | 2026-10-06 | Free text stays in `raw`; staging gets structured columns and codes only |
 | D-009 | 2026-10-06 | dbt builds the analytics layer and runs the data checks |
 | D-010 | 2026-10-06 | Loans are rebuilt by chaining ledger lines on balance |
+| D-011 | 2026-10-06 | One command (`all`) runs the pipeline; Kestra deferred |
 
 ---
 
@@ -141,3 +142,19 @@ one person left as two members break a loan's chain (seen as `lost_track` or a
 carried-balance warning). In 2014 the written due month is about 15 months after
 a normal loan is given, not 12 as `loan_term_days: 365` suggests; to be
 confirmed with the Chama.
+
+## D-011 One command runs the pipeline; Kestra deferred
+**Decision.** `python -m chama.pipeline all` runs every step in order (#13):
+schemas, ingest, name check, anonymise, dbt build and report. It stops, with
+instructions, when new name spellings need a person's review. The review files
+in `data/interim/` are the lasting record of that review: `load-aliases` marks
+their rows `reviewed`, and `all` restores reviewed rows into an empty database,
+so the database can be rebuilt from the Excel files and the review files.
+**Why not Kestra (yet).** The Zoomcamp orchestrates with Kestra, which pays off
+for scheduled, unattended runs. This pipeline runs occasionally (when a year of
+ledger pages has been extracted), on one computer, with a human review in the
+middle; a scheduler would add a server and its own database without removing
+that manual step, and it would need access to the private data and the secret
+key. A Kestra flow can be added on top later with a single task that calls
+`python -m chama.pipeline all`, for example in Milestone 3 when models are
+retrained on a schedule.
