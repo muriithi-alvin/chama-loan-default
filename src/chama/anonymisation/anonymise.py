@@ -208,9 +208,12 @@ def run(engine, key: bytes) -> None:
             parts.setdefault(table, []).append(df)
         codes.append(code_table(chama_aliases, cid, key))
 
+    # Every staging table is written, empty if no workbook has that sheet, so
+    # the dbt models that read them always find them.
     staging = {
-        t: pd.concat(dfs, ignore_index=True).reindex(columns=staging_columns(t))
-        for t, dfs in parts.items()
+        t: pd.concat(parts.get(t, []) + [pd.DataFrame(columns=staging_columns(t))], ignore_index=True)
+        .reindex(columns=staging_columns(t))
+        for t in KEPT_COLUMNS
     }
     all_names = [n for a in aliases.values() for pair in a.items() for n in pair]
     leaks = find_names(staging, all_names)

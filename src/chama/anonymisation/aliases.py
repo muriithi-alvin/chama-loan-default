@@ -19,7 +19,7 @@ import pandas as pd
 
 from chama import StepFailed
 from chama.anonymisation.pseudonymise import normalise_name
-from chama.config import PROJECT_ROOT
+from chama.config import PROJECT_ROOT, shown_path
 
 # Two spellings scoring at least this are suggested as the same member.
 MATCH_THRESHOLD = 0.85
@@ -150,23 +150,21 @@ def review_file(chama_id: str) -> Path:
     return PROJECT_ROOT / "data" / "interim" / f"aliases_{chama_id}.csv"
 
 
-def _shown(path: Path) -> Path:
-    """The path relative to the project folder, for messages."""
-    return path.relative_to(PROJECT_ROOT) if path.is_relative_to(PROJECT_ROOT) else path
-
-
 def write_review_file(suggestions: pd.DataFrame, path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     suggestions.to_csv(path, index=False, encoding="utf-8-sig")  # -sig: Excel reads it right
     return path
 
 
-def read_review_file(path: Path) -> dict[str, str]:
+def read_review_file(path: Path, only_reviewed: bool = False) -> dict[str, str]:
     """A reviewed file as {normalised spelling: canonical name}.
 
+    only_reviewed: keep just the rows marked `reviewed` (loaded before).
     Stops if a row has no canonical name or one spelling is given two names.
     """
     df = pd.read_csv(path, dtype=str, encoding="utf-8-sig").fillna("")
+    if only_reviewed:
+        df = df[df.get("status", pd.Series("", index=df.index)) == "reviewed"]
     df["raw_name"] = df["raw_name"].map(normalise_name)
     df["canonical_name"] = df["canonical_name"].map(lambda c: " ".join(c.split()))
     df = df[df["raw_name"] != ""]
@@ -179,6 +177,17 @@ def read_review_file(path: Path) -> dict[str, str]:
     if clashes:
         raise StepFailed(f"{path.name}: {len(clashes)} spellings are given two different names")
     return dict(zip(df["raw_name"], df["canonical_name"]))
+
+
+def mark_reviewed(path: Path) -> None:
+    """Set every row's status to `reviewed`, keeping the person's edits.
+
+    The file then records the review, so a rebuilt database can be refilled
+    from it (restore_reviewed).
+    """
+    df = pd.read_csv(path, dtype=str, encoding="utf-8-sig").fillna("")
+    df["status"] = "reviewed"
+    write_review_file(df, path)
 
 
 # ---- Database ---------------------------------------------------------------
@@ -246,7 +255,7 @@ def run_suggest(config: dict, engine, overwrite: bool = False) -> None:
         path = review_file(cid)
         if path.exists() and not overwrite and _has_unloaded_changes(path, reviewed):
             raise StepFailed(
-                f"[{cid}] {_shown(path)} has changes that are not loaded yet. "
+                f"[{cid}] {shown_path(path)} has changes that are not loaded yet. "
                 "Run load-aliases first, or add --overwrite to replace the file."
             )
         suggestions = suggest_aliases(names, reviewed)
@@ -257,7 +266,7 @@ def run_suggest(config: dict, engine, overwrite: bool = False) -> None:
             f"members | to check: {status.get('check', 0)}, new: {status.get('new', 0)}, "
             f"reviewed before: {status.get('reviewed', 0)}"
         )
-        print(f"[{cid}] review file: {_shown(path)}")
+        print(f"[{cid}] review file: {shown_path(path)}")
 
 
 def _has_unloaded_changes(path: Path, reviewed: dict[str, str]) -> bool:
@@ -276,5 +285,40 @@ def run_load(config: dict, engine) -> None:
             continue
         aliases = read_review_file(path)
         save_aliases(engine, cid, aliases)
+        mark_reviewed(path)
         members = len({normalise_name(n) for n in aliases.values()})
         print(f"[{cid}] {len(aliases)} spellings -> {members} members saved to private.member_aliases")
+
+
+def restore_reviewed(config: dict, engine) -> None:
+    """Load reviewed spellings that the database is missing, e.g. after a rebuild.
+
+    Only rows marked `reviewed` in the review file are used; suggestions that
+    nobody has checked yet are never loaded.
+    """
+    for chama in config["chamas"]:
+        cid = chama["id"]
+        path = review_file(cid)
+        if not path.exists():
+            continue
+        saved = saved_aliases(engine, cid).get(cid, {})
+        missing = {
+            raw: name
+            for raw, name in read_review_file(path, only_reviewed=True).items()
+            if raw not in saved
+        }
+        if missing:
+            save_aliases(engine, cid, {**saved, **missing})
+            print(f"[{cid}] restored {len(missing)} reviewed spellings from {shown_path(path)}")
+
+
+def unreviewed_counts(config: dict, engine) -> dict[str, int]:
+    """Per Chama, how many spellings in the raw tables have no reviewed alias."""
+    counts = {}
+    for chama in config["chamas"]:
+        cid = chama["id"]
+        names = set(raw_names(engine, cid)["raw_name"])
+        missing = names - set(saved_aliases(engine, cid).get(cid, {}))
+        if missing:
+            counts[cid] = len(missing)
+    return counts
