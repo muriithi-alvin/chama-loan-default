@@ -25,7 +25,7 @@ chama-loan-default/
 ├── data/              PRIVATE - never committed (see .gitignore)
 │   ├── photos/        Ledger photos
 │   ├── raw/           Excel extracted from the photos, as recorded
-│   ├── interim/       Temporary working files
+│   ├── interim/       Working files, incl. the name review files (keep these)
 │   └── processed/     Outputs ready for modelling
 ├── docs/              Documentation and PlantUML diagrams
 ├── notebooks/         Exploration only; final code lives in src/
@@ -93,27 +93,47 @@ Each raw file has four sheets that mirror the ledger: **Statements**, **Meetings
 
 ## Running the pipeline
 
-Inside the `chama` conda environment, with Postgres running (`docker compose up -d`):
+Inside the `chama` conda environment, with Postgres running (`docker compose up -d`),
+one command runs every step in order:
 
 ```powershell
-# 1. Copy the raw Excel files into the raw schema, exactly as written
-python -m chama.pipeline ingest
-
-# 2. Suggest which name spellings are the same member.
-#    Writes data/interim/aliases_<chama>.csv: check canonical_name, correct it, save.
-python -m chama.pipeline suggest-aliases
-
-#    Load the reviewed file into private.member_aliases
-python -m chama.pipeline load-aliases
-
-# 3. Copy raw to staging with member codes instead of names
-python -m chama.pipeline anonymise
-
-# 4. Build the clean tables and loans with dbt, run the data checks and
-#    print the quality report (also saved to data/processed/quality_report.csv)
-python -m chama.pipeline clean
+python -m chama.pipeline all
 ```
 
-`python -m chama.pipeline --help` lists every step. Any other dbt command runs
+| Step | What it does | Run on its own |
+| --- | --- | --- |
+| 0 | Creates the schemas and private tables if missing (`sql/*.sql`) | |
+| 1 | Copies the raw Excel files into the `raw` schema, exactly as written | `ingest` |
+| 2 | Checks every name spelling has a reviewed alias; restores reviewed names into an empty database | `suggest-aliases`, `load-aliases` |
+| 3 | Copies raw to `staging` with member codes instead of names | `anonymise` |
+| 4 | Builds the clean tables and loans with dbt, runs the data checks, prints the quality report (saved to `data/processed/quality_report.csv`) | `clean` |
+
+**When new names appear** (for example after adding a new year), step 2 writes
+`data/interim/aliases_<chama>.csv` and stops, because matching names needs a
+person:
+
+```powershell
+# 1. Open data/interim/aliases_<chama>.csv in Excel; check canonical_name, correct it, save
+# 2. Load the reviewed names; every row in the file is then marked "reviewed"
+python -m chama.pipeline load-aliases
+# 3. Carry on
+python -m chama.pipeline all
+```
+
+Each step can also be run on its own (`python -m chama.pipeline <step>`), and
+`python -m chama.pipeline --help` lists them. Any other dbt command runs
 through the pipeline so it picks up `.env`, for example
 `python -m chama.pipeline dbt test` or `python -m chama.pipeline dbt run --select loans`.
+
+### Starting again from an empty database
+
+The review files in `data/interim/` are the record of the name review, so the
+database can always be rebuilt from the Excel files and those files:
+
+```powershell
+# Deletes ALL database data (the Docker volume). Excel files, photos and
+# review files are not touched.
+docker compose down -v
+docker compose up -d
+python -m chama.pipeline all
+```

@@ -6,6 +6,23 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
 ## [Unreleased] — branch `m1-data-pipeline`
 
+### Added — the whole pipeline in one command (issue #13)
+- `python -m chama.pipeline all` runs schemas, ingest, name check, anonymise
+  and clean in order (decision D-011). It stops with instructions when new
+  name spellings need review.
+- A rebuilt, empty database is filled by `all` alone: reviewed names are
+  restored from `data/interim/aliases_<chama>.csv`; `load-aliases` now marks
+  every loaded row `reviewed`. Tested on an empty database with fake data.
+- `create_schemas()` runs `sql/*.sql`, so `all` also works on a database not
+  created by Docker. README: step table, the review loop and how to start
+  again from an empty database.
+- Tests for the review file (45 pytest tests in total).
+
+### Fixed
+- `anonymise` now always writes all four staging tables, empty where no
+  workbook has that sheet; before, a missing Attendance sheet broke `clean`.
+
+
 ### Added — cleaning, loans and data checks with dbt (issues #10, #11, #12)
 - dbt project `transform/` (decision D-009) building the `analytics` schema:
   `meetings`, `statements`, `new_loans`, `attendance` with typed values and

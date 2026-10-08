@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from chama.config import PROJECT_ROOT
+from chama.config import PROJECT_ROOT, shown_path
 
 REPORT_FILE = PROJECT_ROOT / "data" / "processed" / "quality_report.csv"
 
@@ -37,12 +37,12 @@ def as_tables(report: pd.DataFrame) -> dict[str, pd.DataFrame]:
     return tables
 
 
-def run(engine, path: Path = REPORT_FILE) -> None:
+def run(engine, path: Path | None = None) -> None:
+    path = path or REPORT_FILE
     report = read_report(engine)
     path.parent.mkdir(parents=True, exist_ok=True)
     report.to_csv(path, index=False)
     for chama_id, table in as_tables(report).items():
         print(f"\n[{chama_id}] data quality")
         print(table.to_string())
-    shown = path.relative_to(PROJECT_ROOT) if path.is_relative_to(PROJECT_ROOT) else path
-    print(f"\nSaved to {shown}")
+    print(f"\nSaved to {shown_path(path)}")

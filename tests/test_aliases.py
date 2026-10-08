@@ -5,6 +5,7 @@ import pytest
 from chama import StepFailed
 from chama.anonymisation.aliases import (
     MATCH_THRESHOLD,
+    mark_reviewed,
     name_counts,
     name_similarity,
     read_review_file,
@@ -102,3 +103,29 @@ def test_review_file_giving_one_spelling_two_names_is_refused(tmp_path):
     ).to_csv(path, index=False)
     with pytest.raises(StepFailed, match="two different names"):
         read_review_file(path)
+
+
+def test_loading_marks_the_file_reviewed_and_keeps_the_edits(tmp_path):
+    path = write_review_file(suggest_aliases(names(john_kamau=2, j_kamau=1)), tmp_path / "a.csv")
+    edited = pd.read_csv(path, encoding="utf-8-sig")
+    edited.loc[edited["raw_name"] == "j kamau", "canonical_name"] = "James Kamau"  # a person's fix
+    edited.to_csv(path, index=False, encoding="utf-8-sig")
+    mark_reviewed(path)
+    after = pd.read_csv(path, encoding="utf-8-sig")
+    assert set(after["status"]) == {"reviewed"}
+    assert read_review_file(path)["j kamau"] == "James Kamau"
+
+
+def test_only_reviewed_rows_are_restored(tmp_path):
+    path = tmp_path / "a.csv"
+    pd.DataFrame(
+        {
+            "raw_name": ["john kamau", "j kamau", "mary wanjiku"],
+            "canonical_name": ["John Kamau", "John Kamau", "Mary Wanjiku"],
+            "status": ["reviewed", "reviewed", "check"],
+        }
+    ).to_csv(path, index=False, encoding="utf-8-sig")
+    assert read_review_file(path, only_reviewed=True) == {
+        "john kamau": "John Kamau",
+        "j kamau": "John Kamau",
+    }

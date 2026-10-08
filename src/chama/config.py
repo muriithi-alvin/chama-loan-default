@@ -13,6 +13,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
 
 
+def shown_path(path: Path) -> Path:
+    """A path relative to the project folder when inside it, for messages."""
+    return path.relative_to(PROJECT_ROOT) if path.is_relative_to(PROJECT_ROOT) else path
+
+
 def load_config() -> dict:
     with open(PROJECT_ROOT / "config" / "pipeline.yaml", encoding="utf-8") as f:
         return yaml.safe_load(f)
