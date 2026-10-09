@@ -38,6 +38,7 @@ SHEETS: dict[str, tuple[str, dict[str, str]]] = {
             "loan_after": "Loan balance after this meeting (Bal / Loan balance)",
             "due": "Month or date the loan is due, as written",
             "remarks": "Other text in the row, including crossed-out values",
+            "loan_type": "Loan type mark beside the name, as written (e.g. Em, Eme, (Em)); blank if none",
         },
     ),
     "meetings": (

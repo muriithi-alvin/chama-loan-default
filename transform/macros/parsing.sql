@@ -3,7 +3,7 @@
     flagged instead of dropped. -#}
 
 
-{#- Amount -> number. Handles "40,000", "46 000", "59,000/=", "Ksh. 43,571",
+{#- Amount -> number. Handles "40,000", "46 000", "59,000/=", "92,400/-", "Ksh. 43,571",
     "300k" and sums such as "5500 + 776". "-" and "nil" mean nothing (0). -#}
 {% macro parse_amount(column) -%}
 (
@@ -15,7 +15,7 @@
             then (select sum(part::numeric) from unnest(string_to_array(v, '+')) as part)
     end
     from (
-        select nullif(regexp_replace(lower(trim({{ column }})), '^ksh\.?|/=|,|\s', '', 'g'), '') as v
+        select nullif(regexp_replace(lower(trim({{ column }})), '^ksh\.?|/=|/-|,|\s', '', 'g'), '') as v
     ) as cleaned
 )
 {%- endmacro %}
@@ -39,6 +39,27 @@
             end as y
         from (select trim({{ column }}) as v) as raw_value
         where trim({{ column }}) ~ '^[0-9]{1,2}/[0-9]{1,2}/([0-9]{2}|[0-9]{4})$'
+    ) as parts
+)
+{%- endmacro %}
+
+
+{#- Date written in words -> date: "7th June 2015", "8th/March/2015".
+    Needs a day, a month name and a four-digit year; otherwise null. -#}
+{% macro parse_text_date(column) -%}
+(
+    select case when m is not null and d between 1 and 31 then
+        case when d <= extract(day from make_date(y, m, 1) + interval '1 month' - interval '1 day')
+            then make_date(y, m, d)
+        end
+    end
+    from (
+        select
+            substring(v from '^([0-9]{1,2})')::int as d,
+            {{ month_number("substring(v from '^[0-9]{1,2}[a-z]*[^a-z0-9]+([a-z]+)')") }} as m,
+            substring(v from '([0-9]{4})$')::int as y
+        from (select lower(trim({{ column }})) as v) as raw_value
+        where lower(trim({{ column }})) ~ '^[0-9]{1,2}(st|nd|rd|th)?[^a-z0-9]+[a-z]+[^a-z0-9]+[0-9]{4}$'
     ) as parts
 )
 {%- endmacro %}

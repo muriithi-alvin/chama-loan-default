@@ -121,6 +121,7 @@ select
     lines.page_no,
     lines.meeting_month,
     lines.line_kind,
+    lines.loan_type,
     lines.loan_before,
     lines.repayment,
     lines.interest_rate_pct,

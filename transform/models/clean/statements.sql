@@ -5,6 +5,7 @@
 --   balance        a running loan: balance before, repayment, balance after
 --   loan_given     only a balance is written: a loan given at this meeting
 --   repayment_only a repayment with no balance (cannot be tied to a loan)
+--   no_loan        only dashes: the member has no loan this month
 --   empty          a name with nothing else
 
 with source as (
@@ -35,9 +36,14 @@ typed as (
         end as interest_value,
         coalesce(source.interest, '') like '%\%%' as interest_has_percent,
         source.loan_after as loan_after_text,
-        {{ parse_amount('source.loan_after') }} as loan_after,
+        -- "Cleared" written as the balance means nothing is left
+        case when lower(trim(source.loan_after)) like 'clear%' then 0
+            else {{ parse_amount('source.loan_after') }}
+        end as loan_after,
         source.due as due_text,
         lower(regexp_replace(trim(source.due), '[.,]', '', 'g')) as due_clean,
+        lower(regexp_replace(trim(coalesce(source.loan_type, '')), '[().]', '', 'g'))
+            as loan_type_text,
         upper(coalesce(trim(source.unclear), '')) = 'Y' as unclear,
         source.source_photo,
         source.source_file,
@@ -93,7 +99,15 @@ parsed as (
                     due_month_no, 1)
             end
         end as due_month,
-        due_month_no is not null and due_year_text is null as due_year_inferred
+        due_month_no is not null and due_year_text is null as due_year_inferred,
+        -- Mark beside the name: Em / Eme / (Em) = emergency
+        case
+            when loan_type_text = '' then null
+            when loan_type_text like 'em%' then 'emergency'
+            when loan_type_text in ('sf', 's/f') or loan_type_text like 'school%' then 'school_fees'
+            when loan_type_text like 'top%up%' then 'top_up'
+            else 'other'
+        end as loan_type
     from due_parts
 ),
 
@@ -102,6 +116,8 @@ final as (
         *,
         case
             when loan_before is null and repayment is null and loan_after is null then 'empty'
+            when coalesce(loan_before, 0) = 0 and coalesce(repayment, 0) = 0
+                and coalesce(loan_after, 0) = 0 then 'no_loan'
             when loan_before is null then 'repayment_only'
             when repayment is null and loan_after is null then 'loan_given'
             else 'balance'
@@ -120,6 +136,7 @@ select
     member_code,
     line_no,
     line_kind,
+    loan_type,
     monthly_amount,
     case when {{ is_written('monthly_text') }} and monthly_amount is null
         then trim(monthly_text) end as monthly_note,
@@ -156,6 +173,7 @@ select
         case when {{ is_written('loan_after_text') }} and loan_after is null
             then 'loan_after_unparsed' end,
         case when {{ is_written('due_text') }} and due_month is null then 'due_unparsed' end,
+        case when loan_type = 'other' then 'loan_type_unrecognised' end,
         case when line_kind = 'empty' then 'empty_line' end
     ), '') as issues,
     source_photo,

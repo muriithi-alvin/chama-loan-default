@@ -84,6 +84,7 @@ Each raw file has four sheets that mirror the ledger: **Statements**, **Meetings
 
 ## Documentation
 
+- [docs/milestone_1_report.md](docs/milestone_1_report.md) — Milestone 1: what was built, decisions, stack and all commands
 - [CHANGELOG.md](CHANGELOG.md) — every change, newest first
 - [docs/decisions.md](docs/decisions.md) — design decisions and why
 - [docs/git_workflow.md](docs/git_workflow.md) — branches and how to push and merge

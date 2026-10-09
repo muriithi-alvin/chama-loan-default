@@ -1,6 +1,10 @@
 -- One row per loan: when it was given, when it fell due, what was repaid and
 -- the balance outstanding at the due date.
 --
+-- loan_type: from the list of loans given, else the mark beside the name
+--   (Em = emergency), else emergency when the rate is 5% or more or the loan is
+--   repaid with a premium at its first appearance, else normal.
+--
 -- issue_source (when the loan was given):
 --   loan_given_line  written into the statement table at the meeting it was given
 --   before_records   already running on the first page of the records (date unknown)
@@ -47,7 +51,9 @@ summary as (
             filter (where due_month is not null and not due_year_inferred) as due_written,
         mode() within group (order by due_month)
             filter (where due_month is not null) as due_any,
-        bool_or(unclear) as any_unclear
+        bool_or(unclear) as any_unclear,
+        -- type marked beside the name on any of the loan's lines
+        max(loan_type) filter (where loan_type in ('emergency', 'school_fees')) as marked_type
     from lines
     group by loan_id
 ),
@@ -135,6 +141,7 @@ typed as (
         last_line.last_balance,
         case
             when issued.listed_type in ('emergency', 'school_fees') then issued.listed_type
+            when summary.marked_type is not null then summary.marked_type
             when issued.listed_type is not null then 'normal'
             when summary.max_interest_rate_pct >= 5 then 'emergency'
             -- a short loan repaid with a premium at its first appearance

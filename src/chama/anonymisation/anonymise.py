@@ -25,7 +25,7 @@ from chama.anonymisation.pseudonymise import member_code, normalise_name, resolv
 KEPT_COLUMNS = {
     "statements": [
         "meeting_date", "line_no", "member_name", "monthly", "loan_before",
-        "repayment", "interest", "loan_after", "due",
+        "repayment", "interest", "loan_after", "due", "loan_type",
     ],
     "meetings": [
         "meeting_date", "column_headers", "contribution_total", "brought_forward",
@@ -174,11 +174,12 @@ def write_staging(engine, staging: dict[str, pd.DataFrame], codes: pd.DataFrame)
     """
     from sqlalchemy import BigInteger, Text, text
 
-    from chama.db import table_exists
+    from chama.db import add_missing_columns, table_exists
 
     with engine.begin() as conn:
         for table, df in staging.items():
             if table_exists(conn, f"staging.{table}"):
+                add_missing_columns(conn, "staging", table, df.columns)
                 conn.execute(text(f"DELETE FROM staging.{table}"))
             # Values are still text as written; the clean step gives them types.
             types = {c: BigInteger() if c == "source_row" else Text() for c in df.columns}

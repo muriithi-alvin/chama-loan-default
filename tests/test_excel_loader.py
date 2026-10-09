@@ -6,9 +6,9 @@ from chama.ingestion.raw_format import SHEETS, expected_columns
 from chama.ingestion.template import build_template
 
 # meeting_date, line_no, member_name, monthly, loan_before, repayment, interest,
-# loan_after, due, remarks, source_photo, unclear
-ROW_A = ["", "1", "Test Member A", "350", "23,475", "5000", "2%", "18,815", "Jan 2014", "", "p001.jpg", ""]
-ROW_B = ["", "2", "Test Member B", "SF", 40000, "5 350", "1%", "35000", "Nov 2014", "", "p001.jpg", "Y"]
+# loan_after, due, remarks, loan_type, source_photo, unclear
+ROW_A = ["", "1", "Test Member A", "350", "23,475", "5000", "2%", "18,815", "Jan 2014", "", "", "p001.jpg", ""]
+ROW_B = ["", "2", "Test Member B", "SF", 40000, "5 350", "1%", "35000", "Nov 2014", "", "Em", "p001.jpg", "Y"]
 
 
 def make_workbook(path, rows, columns=None):
@@ -45,10 +45,11 @@ def test_values_are_kept_exactly_as_written(tmp_path):
     assert st.loc[1, "repayment"] == "5 350"
     assert st.loc[1, "monthly"] == "SF"
     assert st.loc[1, "unclear"] == "Y"
+    assert st.loc[1, "loan_type"] == "Em"
 
 
 def test_rows_keep_their_excel_row_number_and_chama(tmp_path):
-    rows = [ROW_A, [None] * 12, ROW_B]  # an empty row in the middle is skipped
+    rows = [ROW_A, [None] * 13, ROW_B]  # an empty row in the middle is skipped
     frames, _ = read_workbook(make_workbook(tmp_path / "wb.xlsx", rows), "chama_test")
     st = frames["statements"]
     assert list(st["source_row"]) == [2, 4]
