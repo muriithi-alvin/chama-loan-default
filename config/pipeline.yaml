@@ -2,16 +2,16 @@
 # Each Chama has a folder of yearly Excel files (e.g. data/raw/chama_b/2014.xlsx).
 # The loader reads every .xlsx in the folder and combines them.
 chamas:
-  - id: chama_a          # the first Chama (records from 2023)
+  - id: chama_a          # the first Chama (records from 2023; no data yet, D-014)
     raw_dir: data/raw/chama_a
   - id: chama_b          # the second Chama (records from 2014)
     raw_dir: data/raw/chama_b
 
 # Sheet and column layout lives in src/chama/ingestion/raw_format.py
 
-# Chama rule: a loan falls due this many days after it is issued.
-# Used only when the ledger has no due month for a loan (the written due month
-# wins). In 2014 the written due months are about 15 months after issue.
+# Chama rule (confirmed): a loan falls due 12 months after it is issued.
+# Used only when the ledger has no due month for a loan. A later due month
+# written in the ledger is an extension agreed for that loan and wins (D-012).
 loan_term_days: 365
 # Emergency loans are repaid at the next meeting
 emergency_term_days: 31

@@ -6,6 +6,26 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
 ## [Unreleased] — branch `m1-data-pipeline`
 
+### Added — 2015 extracted; closing Milestone 1
+- **2015 extracted** from photos p013–p024 into `data/raw/chama_b/2015.xlsx`
+  (local only): 12 meetings, 141 statement rows, 12 new loans; 20 rows flagged
+  unclear. Details and what to check in the extraction log.
+- `Statements.loan_type` for the emergency mark beside a name (`Em`, `Eme`,
+  `(Em)`), standardised in `analytics.statements` and used for the loan type
+  (decision D-013). `2014.xlsx` got the empty column (backup kept as
+  `2014.xlsx.bak`).
+- `add_missing_columns()` in `db.py`: ingest and anonymise add new columns to
+  existing raw and staging tables.
+- Cleaning: `Cleared` as a balance is 0; lines of dashes only are `no_loan`;
+  dates in words (`7th June 2015`) are read; `/-` after an amount is dropped.
+  dbt unit tests cover these.
+- Extraction rules 8–12 in the data dictionary (tick marks, loan type mark,
+  `Cleared`, names partly outside the photo, ambiguous figures).
+- Decisions D-012 (loan term 12 months; later written due months are
+  extensions), D-013 (loan type column) and D-014 (M1 closes with Chama B).
+- `docs/milestone_1_report.md`: what was built, decisions, stack, commands.
+
+
 ### Added — the whole pipeline in one command (issue #13)
 - `python -m chama.pipeline all` runs schemas, ingest, name check, anonymise
   and clean in order (decision D-011). It stops with instructions when new

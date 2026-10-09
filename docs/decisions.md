@@ -16,6 +16,9 @@ rejected. Newest last. Change a decision by adding a new one that replaces it.
 | D-009 | 2026-10-06 | dbt builds the analytics layer and runs the data checks |
 | D-010 | 2026-10-06 | Loans are rebuilt by chaining ledger lines on balance |
 | D-011 | 2026-10-06 | One command (`all`) runs the pipeline; Kestra deferred |
+| D-012 | 2026-10-08 | Loan term is 12 months; later written due months are per-loan extensions |
+| D-013 | 2026-10-08 | Statements gain a `loan_type` column for the emergency mark |
+| D-014 | 2026-10-08 | Milestone 1 closes with Chama B only |
 
 ---
 
@@ -158,3 +161,31 @@ that manual step, and it would need access to the private data and the secret
 key. A Kestra flow can be added on top later with a single task that calls
 `python -m chama.pipeline all`, for example in Milestone 3 when models are
 retrained on a schedule.
+
+## D-012 Loan term 12 months; written due months are extensions
+**Context.** D-010 noted that due months written in the ledger are about 15
+months (13–19 in 2015) after a normal loan is given, while `loan_term_days`
+is 365.
+**Decision.** Confirmed: the Chama's rule is 12 months (`loan_term_days: 365`
+stays). A later due month written beside a loan is an extension agreed for
+that loan, so the written due month still decides when that loan is due; the
+rule only fills in loans with no written due month. `rule_due_month` in
+`analytics.loans` keeps the 12-month date for comparison.
+**Consequences.** Milestone 2 can treat "due later than the rule" as a feature
+(an extended loan) and should define default against the written due month.
+
+## D-013 A loan type column on Statements
+**Context.** From mid-2015 the ledger marks emergency loans with `Em`, `Eme` or
+`(Em)` beside the name. Kept in the name, the mark is lost when names become
+codes; kept in `remarks`, it does not reach staging (D-008).
+**Decision.** `Statements.loan_type` holds the mark as written. The pipeline
+standardises it (`emergency`, `school_fees`, `top_up`) and a marked loan takes
+that type. Existing workbooks get the column empty; the loader and anonymise
+step add missing columns to existing tables, so the raw format can grow.
+**Why.** Emergency and normal loans behave differently; the model needs to know
+which is which.
+
+## D-014 Milestone 1 closes with Chama B only
+**Decision.** Chama A has no ledger data yet. Milestone 1 closes on Chama B;
+Chama A stays in `config/pipeline.yaml` and is picked up automatically when its
+Excel files appear in `data/raw/chama_a/`.

@@ -72,11 +72,12 @@ def load_to_raw(frames: dict[str, pd.DataFrame], engine, chama_id: str, source_f
     """Replace this Chama's rows in raw.<table> and log the load."""
     from sqlalchemy import text
 
-    from chama.db import table_exists
+    from chama.db import add_missing_columns, table_exists
 
     with engine.begin() as conn:
         for table, df in frames.items():
             if table_exists(conn, f"raw.{table}"):
+                add_missing_columns(conn, "raw", table, df.columns)
                 conn.execute(text(f"DELETE FROM raw.{table} WHERE chama_id = :c"), {"c": chama_id})
             df.to_sql(table, conn, schema="raw", if_exists="append", index=False)
             conn.execute(

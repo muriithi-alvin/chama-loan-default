@@ -33,6 +33,7 @@ Every sheet ends with `source_photo` (the photo the row was read from) and
 | `loan_after` | Balance after the meeting |
 | `due` | Month or date the loan is due |
 | `remarks` | Other text in the row, crossed-out values |
+| `loan_type` | Loan type mark beside the name, as written: `Em`, `Eme`, `(Em)` (emergency); blank if none (from 2015) |
 
 ### Meetings — one row per page
 | Column | Meaning |
@@ -64,7 +65,8 @@ Every sheet ends with `source_photo` (the photo the row was read from) and
 
 | Period (approx.) | Headings as written | Mapped to |
 | --- | --- | --- |
-| 2014–2015 | Bal · Repayment · Bal · Month due · % (from Sept 2014: Loan · Loan repayment · Loan balance · Month due) | loan_before · repayment · loan_after · due · interest |
+| 2014 | Bal · Repayment · Bal · Month due · % (from Sept 2014: Loan · Loan repayment · Loan balance · Month due) | loan_before · repayment · loan_after · due · interest |
+| 2015 | Loan · Loan repayment · Loan balance · Month due · % (Jan–Apr); Loan · Payment · Loan balance · Due (from June, % column gone); some pages have no headings | loan_before · repayment · loan_after · due · interest |
 | 2016–2017 | Loan · Repay · Bal · Due | loan_before · repayment · loan_after · due |
 | 2018 | (loan) · (repayment) · (balance) · 350 | loan_before · repayment · loan_after · monthly |
 | 2021 | Monthly · Loan due · Loan repayment · Loan balance | monthly · loan_before · repayment · loan_after |
@@ -88,6 +90,16 @@ This table is updated as each year is extracted.
    they appear.
 7. Rotated photos are read in their correct orientation; the photo file itself
    is never changed.
+8. **Tick marks** after figures (the treasurer's checks) are not typed.
+9. A loan type mark beside a name (`Em`, `Eme`, `(Em)`) goes in
+   `Statements.loan_type`, not in `member_name`.
+10. `Cleared` written as the balance is typed as written (the pipeline reads it
+    as 0). A line of dashes only is typed as dashes.
+11. A name partly outside the photo is typed in full when the rest of the page
+    makes it certain, with `remarks` saying so.
+12. When a figure is ambiguous (a 5 that looks like a 9), type the reading that
+    fits the sums and the next page, mark `unclear = Y` and give the other
+    reading in `remarks`.
 
 ---
 
@@ -123,7 +135,7 @@ types.
 
 | Table | Columns kept from raw | Left in raw |
 | --- | --- | --- |
-| `statements` | `meeting_date`, `line_no`, `member_code`, `monthly`, `loan_before`, `repayment`, `interest`, `loan_after`, `due` | `remarks` |
+| `statements` | `meeting_date`, `line_no`, `member_code`, `monthly`, `loan_before`, `repayment`, `interest`, `loan_after`, `due`, `loan_type` | `remarks` |
 | `meetings` | `meeting_date`, `column_headers`, `contribution_total`, `brought_forward`, `total_collection`, `cash`, `banked`, `next_meeting_date` (date only) | `host`, `notes`, `next_meeting` |
 | `new_loans` | `loan_date`, `member_code`, `amount`, `loan_type` | `remarks` |
 | `attendance` | `meeting_date`, `member_code`, `status` | `remarks` |
@@ -141,7 +153,7 @@ Full column descriptions: `python -m chama.pipeline dbt docs generate`.
 | Table | One row per | Main columns |
 | --- | --- | --- |
 | `meetings` | ledger page (monthly meeting) | `meeting_month` (always filled), `meeting_date`, `date_source` (`written`, `previous_page`, `estimated`), footer amounts |
-| `statements` | member line on a page | `line_kind` (`balance`, `loan_given`, `repayment_only`, `empty`), `loan_before`, `repayment`, `interest_rate_pct` or `interest_amount`, `loan_after`, `closing_balance`, `due_month` |
+| `statements` | member line on a page | `line_kind` (`balance`, `loan_given`, `repayment_only`, `no_loan`, `empty`), `loan_type` (from the mark beside the name), `loan_before`, `repayment`, `interest_rate_pct` or `interest_amount`, `loan_after`, `closing_balance`, `due_month` |
 | `new_loans` | loan listed as given | `amount`, `loan_type` (`normal`, `emergency`, `school_fees`, `top_up`), `loan_month` |
 | `attendance` | member per meeting | `status` (`present`, `absent`, `apology`, `late`) |
 | `loan_lines` | statement line | `loan_id`, `line_seq`, `link` (`start`, `continued`, `continued_with_top_up`, `repayment_unlinked`, `not_a_loan`), `carry_difference`, `top_up_amount` |
@@ -150,7 +162,8 @@ Full column descriptions: `python -m chama.pipeline dbt docs generate`.
 
 **How values are read.** Amounts: commas, spaces, `/=` and `Ksh` are dropped,
 `300k` is 300,000, sums such as `5500 + 776` are added, `-` and `nil` are 0.
-Dates are day first (`8/6/14` is 8 June 2014). A due month with no year
+Dates are day first (`8/6/14` is 8 June 2014); dates in words (`7th June 2015`)
+are read too. `Cleared` as a balance is 0; `/-` after an amount is dropped like `/=`. A due month with no year
 (`Aug`) is the next August after the meeting. Interest with `%`, or a number up
 to 20, is a rate; a larger number is an amount.
 

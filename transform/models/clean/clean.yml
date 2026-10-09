@@ -43,11 +43,17 @@ models:
       - name: meeting_month
         data_tests: [not_null]
       - name: line_kind
-        description: balance, loan_given, repayment_only or empty
+        description: balance, loan_given, repayment_only, no_loan (only dashes) or empty
         data_tests:
           - accepted_values:
               arguments:
-                values: [balance, loan_given, repayment_only, empty]
+                values: [balance, loan_given, repayment_only, no_loan, empty]
+      - name: loan_type
+        description: From the mark beside the name (Em / Eme = emergency); empty if no mark
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [emergency, school_fees, top_up, other]
       - name: interest_rate_pct
         description: Interest written as a rate ("2%" or a number up to 20)
       - name: interest_amount
@@ -105,6 +111,10 @@ unit_tests:
              loan_before: "Ksh. 30,000/=", interest: "2100", due: "11/15"}
           - {chama_id: c, source_file: f.xlsx, source_row: 5, source_photo: c_p001.jpg, member_code: M-4,
              loan_before: "?", repayment: "500"}
+          - {chama_id: c, source_file: f.xlsx, source_row: 6, source_photo: c_p001.jpg, member_code: M-5,
+             loan_before: "20,000", repayment: "21,000", loan_after: "Cleared", loan_type: "(Em)"}
+          - {chama_id: c, source_file: f.xlsx, source_row: 7, source_photo: c_p001.jpg, member_code: M-6,
+             loan_before: "-", repayment: "-", loan_after: "-", due: "-"}
       - input: ref('meetings')
         rows:
           - {page_id: "c:c_p001.jpg", page_no: 1, meeting_month: "2014-08-01"}
@@ -122,6 +132,12 @@ unit_tests:
         - {line_id: "c:f.xlsx:5", line_kind: repayment_only, loan_before: null, repayment: 500,
            interest_rate_pct: null, interest_amount: null, loan_after: null, closing_balance: null,
            due_month: null, due_year_inferred: false, issues: loan_before_unparsed}
+        - {line_id: "c:f.xlsx:6", line_kind: balance, loan_before: 20000, repayment: 21000,
+           interest_rate_pct: null, interest_amount: null, loan_after: 0, closing_balance: 0,
+           due_month: null, due_year_inferred: false, issues: null}
+        - {line_id: "c:f.xlsx:7", line_kind: no_loan, loan_before: 0, repayment: 0,
+           interest_rate_pct: null, interest_amount: null, loan_after: 0, closing_balance: 0,
+           due_month: null, due_year_inferred: false, issues: null}
 
   - name: undated_pages_get_a_month
     model: meetings
@@ -133,6 +149,7 @@ unit_tests:
           - {chama_id: c, source_photo: c_p002.jpg}
           - {chama_id: c, source_photo: c_p003.jpg, meeting_date: "6/4/14"}
           - {chama_id: c, source_photo: c_p004.jpg}
+          - {chama_id: c, source_photo: c_p005.jpg, meeting_date: "7th June 2014", total_collection: "92,400/-"}
     expect:
       rows:
         - {page_no: 1, meeting_month: "2014-02-01", meeting_date: null, date_source: estimated,
@@ -143,3 +160,5 @@ unit_tests:
            date_source: written, total_collection: null, issues: null}
         - {page_no: 4, meeting_month: "2014-05-01", meeting_date: null, date_source: estimated,
            total_collection: null, issues: null}
+        - {page_no: 5, meeting_month: "2014-06-01", meeting_date: "2014-06-07", date_source: written,
+           total_collection: 92400, issues: null}

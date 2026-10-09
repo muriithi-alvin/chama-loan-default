@@ -21,7 +21,8 @@ typed as (
         source.chama_id,
         source.member_code,
         source.loan_date as loan_date_text,
-        {{ parse_dmy('source.loan_date') }} as loan_date,
+        coalesce({{ parse_dmy('source.loan_date') }}, {{ parse_text_date('source.loan_date') }})
+            as loan_date,
         substring(trim(source.loan_date) from '^\?/([0-9]{1,2})/[0-9]{2,4}$')::int
             as month_only_month,
         substring(trim(source.loan_date) from '^\?/[0-9]{1,2}/([0-9]{2,4})$') as month_only_year,

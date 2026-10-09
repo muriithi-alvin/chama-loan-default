@@ -18,7 +18,7 @@ pages as (
         source_file,
         source_row,
         meeting_date as meeting_date_text,
-        {{ parse_dmy('meeting_date') }} as written_date,
+        coalesce({{ parse_dmy('meeting_date') }}, {{ parse_text_date('meeting_date') }}) as written_date,
         column_headers,
         contribution_total as contribution_total_text,
         {{ parse_amount('contribution_total') }} as contribution_total,
