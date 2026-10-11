@@ -6,6 +6,29 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
 ## [Unreleased] — branch `m1-data-pipeline`
 
+### Added — 2016 to 2020 extracted
+- **2016–2020 extracted** from photos p025–p085 into one workbook per year
+  (local only): 60 meetings, 710 statement rows, 55 listed loans. p048 (Dec
+  2017) is blurred; its retake p051 is typed under p048 (extraction rule 13).
+  What to check on each page is in the extraction log.
+- Cleaning: a written month without a day ("May 2016", "Nov/17") dates a
+  page (`date_source = written_month`); a due year cut off to three digits
+  counts as no year; `E` / `(E)` is an emergency mark; "Cleared" in the due
+  column is not flagged; a line with an unreadable value is no longer taken
+  for a new loan.
+- Loans: a balance-only line can continue an open loan; new status
+  `topped_up` (an unpaid balance rolled into a bigger loan of the same member,
+  with `rolled_into_loan_id`); the "balance grows too much" check allows 1%
+  for rounding.
+- Extraction rules 13–15 (retakes, cut-off due years, emergency marks).
+
+### Found in 2016–2020 (to raise with the Chama)
+- From 2017 emergency loans run 2–3 months at 3% rather than being repaid at
+  the next meeting at 5%; `emergency_term_days: 31` marks most of them late.
+- One member stops appearing after January 2020 with 89,640 outstanding; two
+  normal loans are overdue at the end of 2020.
+
+
 ### Added — 2015 extracted; closing Milestone 1
 - **2015 extracted** from photos p013–p024 into `data/raw/chama_b/2015.xlsx`
   (local only): 12 meetings, 141 statement rows, 12 new loans; 20 rows flagged

@@ -448,7 +448,7 @@ git switch m1-data-pipeline
 
 | Item | Status (8 October 2026) |
 | --- | --- |
-| Extract the remaining ledger pages | **In progress, year by year.** 2015 done (p013–p024); 125 of 149 photos left (2016 – April 2026). Each year: extract, run `all`, review new names, check against the paper. |
+| Extract the remaining ledger pages | **In progress, year by year.** 2015–2020 done (p013–p085); 64 of 149 photos left (2021 – April 2026). Each year: extract, run `all`, review new names, check against the paper. |
 | Check the 2014 test batch against the paper (#7) | **Waiting for the paper check.** 2015 is to be checked the same way. |
 | Confirm the loan term | **Done.** 12 months; later written due months are extensions (D-012). |
 | Resolve the duplicate member | **Ready.** Merge the two spellings in the review file and run `load-aliases`, then `all`. |

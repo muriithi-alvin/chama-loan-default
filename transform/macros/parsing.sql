@@ -65,6 +65,24 @@
 {%- endmacro %}
 
 
+{#- Month and year without a day -> first of that month: "May 2016",
+    "Nov. 2016", "Nov/17", "Nov '17" (two-digit years are 20xx). -#}
+{% macro parse_month_year(column) -%}
+(
+    select make_date(case when length(y) = 2 then 2000 + y::int else y::int end, m, 1)
+    from (
+        select
+            {{ month_number("substring(v from '^([a-z]+)')") }} as m,
+            substring(v from '([0-9]{4}|[0-9]{2})$') as y
+        from (select lower(regexp_replace(trim({{ column }}), '[.,]', '', 'g')) as v) as raw_value
+        where lower(regexp_replace(trim({{ column }}), '[.,]', '', 'g'))
+            ~ '^[a-z]+\s*[/''-]?\s*([0-9]{4}|[0-9]{2})$'
+    ) as parts
+    where m is not null
+)
+{%- endmacro %}
+
+
 {#- Month name or abbreviation (lower case) -> 1..12, otherwise null. -#}
 {% macro month_number(word) -%}
 case {{ word }}

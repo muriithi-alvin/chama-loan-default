@@ -33,6 +33,7 @@ measures as (
             count(*) as pages,
             count(*) filter (where issues is not null) as flagged,
             count(*) filter (where unclear) as unclear_in_ledger,
+            count(*) filter (where date_source = 'written_month') as dated_by_month_only,
             count(*) filter (where date_source = 'previous_page') as dated_from_previous_page,
             count(*) filter (where date_source = 'estimated') as dated_by_estimate
         from meetings
@@ -43,6 +44,7 @@ measures as (
         (2, 'flagged', flagged),
         (3, 'unclear in ledger', unclear_in_ledger),
         (4, 'dated from previous page', dated_from_previous_page),
+        (6, 'dated by month only', dated_by_month_only),
         (5, 'dated by estimate', dated_by_estimate)
     ) as m(measure_order, measure, value)
 
@@ -146,6 +148,7 @@ measures as (
             count(*) filter (where issue_source = 'estimated') as issue_month_estimated,
             count(*) filter (where status = 'repaid_on_time') as repaid_on_time,
             count(*) filter (where status = 'repaid_late') as repaid_late,
+            count(*) filter (where status = 'topped_up') as topped_up,
             count(*) filter (where status = 'overdue') as overdue,
             count(*) filter (where status in ('open', 'open_no_due_date')) as open,
             count(*) filter (where status = 'lost_track') as lost_track,
@@ -163,6 +166,7 @@ measures as (
         (54, 'issue month estimated', issue_month_estimated),
         (55, 'repaid on time', repaid_on_time),
         (56, 'repaid late', repaid_late),
+        (61, 'topped up (rolled into a new loan)', topped_up),
         (57, 'overdue', overdue),
         (58, 'open', open),
         (59, 'lost track', lost_track),

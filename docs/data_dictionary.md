@@ -26,7 +26,7 @@ Every sheet ends with `source_photo` (the photo the row was read from) and
 | `meeting_date` | Date at the top of the page, as written (blank if none) |
 | `line_no` | Row number written in the ledger |
 | `member_name` | Name as written |
-| `monthly` | Monthly column as written: `350`, `SF`, `Emergency`, `paid Feb` |
+| `monthly` | Monthly contribution as written (from December 2016): `300`, `500+200`, `SF` |
 | `loan_before` | Balance before the meeting |
 | `repayment` | Amount repaid at the meeting |
 | `interest` | Rate (`2%`) or amount (`2100`), as written |
@@ -100,6 +100,15 @@ This table is updated as each year is extracted.
 12. When a figure is ambiguous (a 5 that looks like a 9), type the reading that
     fits the sums and the next page, mark `unclear = Y` and give the other
     reading in `remarks`.
+13. **Retakes.** When a page is photographed again later (because the first
+    photo is unreadable), type it under the first photo's number, so pages stay
+    in ledger order, and name the retake in `Meetings.notes`. The retake gets no
+    rows of its own.
+14. A due month whose year is cut off at the photo edge is typed as the month
+    only (`Sept`, not `Sept 201`); the pipeline infers the year.
+15. Emergency marks in any position (`Em`, `E`, `(E)`, `Emergency` beside the
+    name, in the monthly or due column, or in the line-number column) go in
+    `Statements.loan_type`.
 
 ---
 

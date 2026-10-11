@@ -21,7 +21,7 @@ models:
         data_tests:
           - accepted_values:
               arguments:
-                values: [written, previous_page, estimated]
+                values: [written, written_month, previous_page, estimated]
 
   - name: statements
     description: >
@@ -112,7 +112,8 @@ unit_tests:
           - {chama_id: c, source_file: f.xlsx, source_row: 5, source_photo: c_p001.jpg, member_code: M-4,
              loan_before: "?", repayment: "500"}
           - {chama_id: c, source_file: f.xlsx, source_row: 6, source_photo: c_p001.jpg, member_code: M-5,
-             loan_before: "20,000", repayment: "21,000", loan_after: "Cleared", loan_type: "(Em)"}
+             loan_before: "20,000", repayment: "21,000", loan_after: "Cleared", loan_type: "(Em)",
+             due: "Sept 201"}
           - {chama_id: c, source_file: f.xlsx, source_row: 7, source_photo: c_p001.jpg, member_code: M-6,
              loan_before: "-", repayment: "-", loan_after: "-", due: "-"}
       - input: ref('meetings')
@@ -134,7 +135,7 @@ unit_tests:
            due_month: null, due_year_inferred: false, issues: loan_before_unparsed}
         - {line_id: "c:f.xlsx:6", line_kind: balance, loan_before: 20000, repayment: 21000,
            interest_rate_pct: null, interest_amount: null, loan_after: 0, closing_balance: 0,
-           due_month: null, due_year_inferred: false, issues: null}
+           due_month: "2014-09-01", due_year_inferred: true, issues: null}
         - {line_id: "c:f.xlsx:7", line_kind: no_loan, loan_before: 0, repayment: 0,
            interest_rate_pct: null, interest_amount: null, loan_after: 0, closing_balance: 0,
            due_month: null, due_year_inferred: false, issues: null}
@@ -150,6 +151,7 @@ unit_tests:
           - {chama_id: c, source_photo: c_p003.jpg, meeting_date: "6/4/14"}
           - {chama_id: c, source_photo: c_p004.jpg}
           - {chama_id: c, source_photo: c_p005.jpg, meeting_date: "7th June 2014", total_collection: "92,400/-"}
+          - {chama_id: c, source_photo: c_p006.jpg, meeting_date: "July 2014"}
     expect:
       rows:
         - {page_no: 1, meeting_month: "2014-02-01", meeting_date: null, date_source: estimated,
@@ -162,3 +164,5 @@ unit_tests:
            total_collection: null, issues: null}
         - {page_no: 5, meeting_month: "2014-06-01", meeting_date: "2014-06-07", date_source: written,
            total_collection: 92400, issues: null}
+        - {page_no: 6, meeting_month: "2014-07-01", meeting_date: null, date_source: written_month,
+           total_collection: null, issues: null}

@@ -48,6 +48,8 @@ models:
                 values: [ledger, ledger_year_inferred, rule]
       - name: rule_due_month
         description: Due month by the loan_term_days rule, for comparing with the ledger
+      - name: rolled_into_loan_id
+        description: For a topped_up loan, the loan its unpaid balance was rolled into
       - name: outstanding_at_due
         description: Balance at the due month; 0 if repaid by then; empty if the due month is after the records end
       - name: status
@@ -55,7 +57,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: [repaid_on_time, repaid_late, repaid, overdue, open, open_no_due_date, lost_track]
+                values: [repaid_on_time, repaid_late, repaid, topped_up, overdue, open, open_no_due_date, lost_track]
 
 unit_tests:
   - name: lines_are_chained_into_loans

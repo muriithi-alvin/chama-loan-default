@@ -56,7 +56,9 @@ candidates as (
         on topup.chama_id = prev.chama_id
         and topup.member_code = prev.member_code
         and topup.page_no = prev.page_no
-    where cur.line_kind = 'balance'
+    -- a balance-only line (loan_given) can also carry an unpaid balance forward;
+    -- it starts a new loan only when no open balance matches
+    where cur.line_kind in ('balance', 'loan_given')
         and cur.loan_before > 0
 ),
 

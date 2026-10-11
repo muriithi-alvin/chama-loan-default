@@ -7,6 +7,11 @@ photos stay on the project computer only.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2014 | chama_b | p001–p012 | 12 | 167 | 22 | 16 statements, 7 meetings, 7 loans | Pending |
 | 2015 | chama_b | p013–p024 | 12 | 141 | 12 | 9 statements, 9 meetings, 2 loans | Pending |
+| 2016 | chama_b | p025–p036 | 12 | 131 | 15 | 3 statements, 4 meetings, 2 loans | Pending |
+| 2017 | chama_b | p037–p048 (+ p051, retake of p048) | 12 | 148 | 12 | 0 statements, 3 meetings, 0 loans | Pending |
+| 2018 | chama_b | p049, p050, p052–p061 | 12 | 144 | 16 | 2 statements, 2 meetings, 2 loans | Pending |
+| 2019 | chama_b | p062–p073 | 12 | 146 | 4 | 1 statement, 1 meeting, 0 loans | Pending |
+| 2020 | chama_b | p074–p085 | 12 | 141 | 8 | 8 statements, 1 meeting, 1 loan | Pending |
 
 ## 2014 (chama_b_p001 – p012)
 
@@ -89,3 +94,118 @@ balance carries forward within 2%. The pipeline also flags one 2015 line
 whose balance grows more than interest allows (p019, above). One 2014 loan of
 5,000 shows as `lost_track`: it is the one cleared after the meeting on p014,
 which the ledger line itself does not show.
+
+## 2016 (chama_b_p025 – p036)
+
+**Coverage.** One page per month. p025 and p026 have no date; p027 ("6th
+March") has no year; several pages give only the month ("May 2016"), which the
+pipeline now reads as the meeting month.
+
+**Layout seen.** The % column comes and goes. p025's due-month column is cut
+off at the photo edge (only first letters visible), so due is left blank;
+p034's due years are cut off, so only the month is typed. From December
+(p036) a **Monthly** column records each member's contribution (300).
+
+**New in the ledger:** emergency loans also marked `(E)` beside the amount or
+`Emergency` in the due column (typed in `loan_type`); emergency lines written in
+red ink on p031 (noted in `remarks`); "Cleared" with a date written beside a
+balance (typed as `Cleared`); repayments written as sums (`6500 + 500`). Normal
+loans grew to 100,000.
+
+**Things to check against the paper:**
+- p026 (written faintly): one repayment read as 10,330 (could look like
+  11,130); the new-loan amount read as 82,000 (could be 22,000; the next page
+  shows 100,000).
+- p031: a repayment reads 2,150 but the balance implies about 20,000.
+- p032: a repayment with "(+10,000 ...)" written beside it; one new loan of
+  20,000 has its name cut off.
+
+## 2017 (chama_b_p037 – p048, with p051)
+
+**Retake.** p048 (December) is too blurred to read. The same page was
+photographed again later as p051 (after the January and February 2018 pages).
+December is typed under p048 so pages stay in ledger order; its meeting notes
+name p051 (extraction rule 13). p051 has no rows of its own.
+
+**Layout seen.** Monthly contributions on most pages (300, rising to 500 and
+more). From May (p041) interest is written as an **amount** in its own column,
+with the rate (1%) in a separate % column; the amount is typed in `interest`.
+p037's first number column is headed "MONTHLY" but holds the loan balance.
+Emergency repayments are sometimes written as prose under the table (kept in
+the meeting notes). A "books review" on 5 June 2017 (p042) compares total debt:
+540,400 (30 April 2015), 642,200 (1 November 2015), 677,940 (5 June 2017).
+
+**Things to check:** p042's total-debt table; p046's date (24/10/17 written
+over 24/9/17); names marked `*` on p047 (meaning not written).
+
+## 2018 (chama_b_p049, p050, p052 – p061)
+
+**Coverage.** January–December; p051 belongs to 2017 (above).
+
+**Layout seen.** Emergency lines carry **E** in the line-number column or the
+monthly column (typed in `loan_type`). **Due months are no longer written**
+from 2018, so 2018 loans take their due date from the 12-month rule. Payments
+by M-Pesa appear alongside cash. Normal loans reach 130,000.
+
+**Things to check against the paper:**
+- p052: two "?" written for an emergency repayment and balance.
+- p053: one repayment on correction fluid, read as 4320+200 (could be
+  4300+240); one line has no balance before.
+- p056: a new loan of 44,000 with "130" written above it.
+- p058: a new emergency loan of 5,000 to a name that matches no member (as
+  written; see the name review); one repayment written over (read as 5,400).
+
+**For the Chama (emergency loan term).** From 2017 emergency loans run 2–3
+months at 3% (for example 30,000 repaid as 10,600, 10,600, 10,300), instead of
+being repaid at the next meeting at 5%. With `emergency_term_days: 31` most of
+them show as repaid late. Confirm the emergency term for these years.
+
+## 2019 (chama_b_p062 – p073)
+
+**Coverage.** January–December. p068 and p069 are two photos of one ledger
+page: the July meeting at the top and the start of the August meeting at the
+bottom. August is typed under p069, which shows all of it. p066 is dated
+"/5/2019" with no day; the meeting month comes from the date and the previous
+page's "next meeting" note.
+
+**Layout seen.** Most pages have no headings; the columns are loan, repayment,
+balance and then the monthly contribution (moved to the right). Interest and
+due months are no longer written (two loans show "3/20"). Emergency lines are
+marked E; in May they sit under an "Emergency" heading with only the amount.
+Payments made after the meeting are listed with their dates under the table.
+Few new loans are listed (4).
+
+**Things to check against the paper:**
+- p068: one balance read as 67,000 (could be 70,000; the next meeting's loan
+  column has 70,000 crossed out and 67,000 written above).
+- p069: an emergency line with no amounts (a faint, rubbed-out figure).
+- p073: one line's figures crossed out in red (the loan moved to a later
+  line); a short line with only a first name and a payment of 1,000.
+
+## 2020 (chama_b_p074 – p085)
+
+**Coverage.** January–March are meetings. From April the pages are headed
+"<month> 2020 contributions" with no meeting details (no gatherings in that
+period); a letter after each name shows payment by cash (C) or bank (B), with
+the key on the May page. These letters are noted in `remarks`, not typed in
+the name.
+
+**New in the ledger:** school-fees loans (November and December), typed as
+`school fee` / `school fees` in `loan_type`. One member is written under a
+different surname on two pages (see the name review).
+
+**Things to check against the paper:**
+- p075: one balance written "?? 59,500" over a crossed-out 60,000; the second
+  new loan (45,000) has an unclear name.
+- p076: one repayment with an overwritten first digit (7,250).
+- p077: one repayment overwritten in red (10,9.0).
+- p079: a balance read as 52,095 (could be 53,095).
+- p081: several overwritten figures and correction fluid on one line.
+- p083: total collection written "195,550 ?".
+- p085: an emergency repayment read as 10,900 (10,300 would match 3%); a
+  school-fees balance read as 30,000 (could be 80,000).
+
+**Seen by the pipeline (to raise with the Chama).** One member stops
+appearing after January 2020 with 89,640 outstanding (`lost_track`). Two
+normal loans are overdue at the end of 2020 after months of interest-only
+payments.

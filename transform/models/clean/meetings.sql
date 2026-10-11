@@ -2,6 +2,7 @@
 -- meeting month for every page.
 --
 -- Where the page has no date, the month is worked out in this order:
+--   written_month : only the month and year are written ("May 2016")
 --   previous_page : the previous page's "next meeting" note gives the day
 --   estimated     : one page per month, counted from the nearest dated page
 
@@ -19,6 +20,7 @@ pages as (
         source_row,
         meeting_date as meeting_date_text,
         coalesce({{ parse_dmy('meeting_date') }}, {{ parse_text_date('meeting_date') }}) as written_date,
+        {{ parse_month_year('meeting_date') }} as written_month,
         column_headers,
         contribution_total as contribution_total_text,
         {{ parse_amount('contribution_total') }} as contribution_total,
@@ -39,13 +41,13 @@ anchored as (
     select
         pages.*,
         anchor.page_no as anchor_page,
-        anchor.written_date as anchor_date
+        anchor.dated as anchor_date
     from pages
     left join lateral (
-        select dated.page_no, dated.written_date
+        select dated.page_no, coalesce(dated.written_date, dated.written_month) as dated
         from pages as dated
         where dated.chama_id = pages.chama_id
-            and dated.written_date is not null
+            and coalesce(dated.written_date, dated.written_month) is not null
         order by abs(dated.page_no - pages.page_no), dated.page_no
         limit 1
     ) as anchor on true
@@ -97,11 +99,12 @@ final as (
     select
         *,
         coalesce(written_date, note_date) as meeting_date,
-        date_trunc('month', coalesce(written_date, note_date, estimated_month))::date
+        date_trunc('month', coalesce(written_date, note_date, written_month, estimated_month))::date
             as meeting_month,
         case
             when written_date is not null then 'written'
             when note_date is not null then 'previous_page'
+            when written_month is not null then 'written_month'
             when estimated_month is not null then 'estimated'
         end as date_source
     from note_dates
@@ -125,6 +128,7 @@ select
         case when page_no is null then 'page_number_unknown' end,
         case when meeting_month is null then 'meeting_month_missing' end,
         case when {{ is_written('meeting_date_text') }} and written_date is null
+            and written_month is null
             then 'meeting_date_unparsed' end,
         case when {{ is_written('contribution_total_text') }} and contribution_total is null
             then 'contribution_total_unparsed' end,
