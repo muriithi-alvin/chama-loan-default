@@ -4,8 +4,9 @@
 -- earlier line of the same member (up to max_pages_between_lines pages back)
 -- when its balance before matches that line's closing balance, or that
 -- balance plus a loan given to the member at that meeting (a top-up). The
--- difference may be up to carry_tolerance of the balance. Each line takes the
--- nearest earlier page, then the closest balance, and each earlier line is
+-- difference may be up to carry_tolerance of the balance. Each line prefers an
+-- earlier line of the same loan type (normal, emergency, school fees), then
+-- the nearest page, then the closest balance, and each earlier line is
 -- continued at most once (both must choose each other). A line that continues
 -- nothing starts a new loan.
 --
@@ -41,6 +42,8 @@ candidates as (
         cur.line_id,
         prev.line_id as previous_line_id,
         cur.page_no - prev.page_no as pages_apart,
+        case when coalesce(nullif(cur.loan_type, 'top_up'), 'normal')
+            = coalesce(nullif(prev.loan_type, 'top_up'), 'normal') then 0 else 1 end as type_mismatch,
         abs(cur.loan_before - prev.closing_balance) as plain_difference,
         abs(cur.loan_before - (prev.closing_balance + coalesce(topup.new_amount, 0)))
             as top_up_difference,
@@ -82,10 +85,10 @@ ranked as (
     select
         *,
         row_number() over (
-            partition by line_id order by pages_apart, difference, previous_line_id
+            partition by line_id order by type_mismatch, pages_apart, difference, previous_line_id
         ) as rank_for_line,
         row_number() over (
-            partition by previous_line_id order by pages_apart, difference, line_id
+            partition by previous_line_id order by type_mismatch, pages_apart, difference, line_id
         ) as rank_for_previous
     from allowed
 ),
@@ -130,6 +133,9 @@ select
     lines.interest_amount,
     lines.loan_after,
     lines.closing_balance,
+    -- the loan's balance when this line opens (a new loan written only in the
+    -- balance-after column opens at that balance)
+    coalesce(nullif(lines.loan_before, 0), lines.closing_balance) as opening_balance,
     lines.closing_estimated,
     lines.due_month,
     lines.due_year_inferred,

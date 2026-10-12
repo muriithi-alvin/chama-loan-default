@@ -4,8 +4,9 @@
 -- line_kind:
 --   balance        a running loan: balance before, repayment, balance after
 --   loan_given     only a balance is written: a loan given at this meeting
+--                  (in the balance-before column, or only in the balance after)
 --   repayment_only a repayment with no balance (cannot be tied to a loan)
---   no_loan        only dashes: the member has no loan this month
+--   no_loan        only dashes or a contribution: no loan this month
 --   empty          a name with nothing else
 
 with source as (
@@ -104,7 +105,7 @@ parsed as (
         -- Mark beside the name: Em / Eme / (Em) / (E) = emergency
         case
             when loan_type_text = '' then null
-            when loan_type_text = 'e' or loan_type_text like 'em%' then 'emergency'
+            when loan_type_text in ('e', 'er') or loan_type_text like 'em%' then 'emergency'
             when loan_type_text in ('sf', 's/f') or loan_type_text like 'school%' then 'school_fees'
             when loan_type_text like 'top%up%' then 'top_up'
             else 'other'
@@ -116,9 +117,16 @@ final as (
     select
         *,
         case
-            when loan_before is null and repayment is null and loan_after is null then 'empty'
+            -- only a contribution note ("Paid up to Jan 2025"): no loan this month
+            when loan_before is null and repayment is null and loan_after is null
+                then case when {{ is_written('monthly_text') }} then 'no_loan' else 'empty' end
             when coalesce(loan_before, 0) = 0 and coalesce(repayment, 0) = 0
                 and coalesce(loan_after, 0) = 0 then 'no_loan'
+            -- a new loan written only as the balance after: "- | - | 150,000"
+            when coalesce(loan_before, 0) = 0 and coalesce(repayment, 0) = 0
+                and loan_after > 0 then 'loan_given'
+            -- a payment with no loan before or after (a penalty, a stray repayment)
+            when coalesce(loan_before, 0) = 0 and coalesce(loan_after, 0) = 0 then 'repayment_only'
             when loan_before is null then 'repayment_only'
             -- only a balance written (a "?" or other unreadable value is not blank)
             when repayment is null and loan_after is null

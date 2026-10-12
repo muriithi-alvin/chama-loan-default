@@ -12,6 +12,12 @@ photos stay on the project computer only.
 | 2018 | chama_b | p049, p050, p052–p061 | 12 | 144 | 16 | 2 statements, 2 meetings, 2 loans | Pending |
 | 2019 | chama_b | p062–p073 | 12 | 146 | 4 | 1 statement, 1 meeting, 0 loans | Pending |
 | 2020 | chama_b | p074–p085 | 12 | 141 | 8 | 8 statements, 1 meeting, 1 loan | Pending |
+| 2021 | chama_b | p086–p097 | 12 | 175 | 19 | 2 statements, 0 meetings, 4 loans | Pending |
+| 2022 | chama_b | p098–p109 | 12 | 152 | 14 | 7 statements, 0 meetings, 2 loans | Pending |
+| 2023 | chama_b | p110–p121 | 12 | 144 | 11 | 1 statement, 0 meetings, 0 loans | Pending |
+| 2024 | chama_b | p122–p133 | 12 | 144 | 15 | 0 statements, 0 meetings, 1 loan | Pending |
+| 2025 | chama_b | p134–p145 | 12 | 124 | 17 | 2 statements, 0 meetings, 1 loan | Pending |
+| 2026 | chama_b | p146–p149 (Jan–Apr) | 4 | 42 | 9 | 2 statements, 0 meetings, 0 loans | Pending |
 
 ## 2014 (chama_b_p001 – p012)
 
@@ -209,3 +215,93 @@ different surname on two pages (see the name review).
 appearing after January 2020 with 89,640 outstanding (`lost_track`). Two
 normal loans are overdue at the end of 2020 after months of interest-only
 payments.
+
+## 2021 (chama_b_p086 – p097)
+
+**Coverage.** January–December; p086 (January) has no date, only "HAPPY NEW
+YEAR 2021". Most pages give the month only.
+
+**New in the ledger:** school-fees loans become regular (SF lines); normal loans
+reach 150,000–200,000 from mid-year. A new loan can be written only in the
+balance-after column ("- | - | 150,000"), typed as written (rule 16). A penalty
+payment appears as its own line with "Penalty" in the monthly column (rule 17).
+"=" is used for "nothing" on some lines.
+
+**Things to check against the paper:**
+- p086: a school-fees repayment corrected from 10,600 to 5,600.
+- p089: a school-fees balance read as 30,000 (could be 80,000).
+- p092: the third new loan of 200,000 is cut off at the page bottom.
+- p093: a school-fees loan in the loans list is struck through.
+- p097: the day of one loan date is unclear.
+
+## 2022 (chama_b_p098 – p109)
+
+**Coverage.** January–December; p098 (January) and p104 (July) have no date,
+p109's heading is cut off; all three are placed by page order.
+
+**Layout seen.** From July (p104) the table has an **Interest** column (an
+amount) and the repayment column holds the principal only (headed "Loan
+reduction" in September). Interest amounts go in `interest` (rule 19).
+
+**Things to check against the paper:**
+- p099: two repayments with overwritten digits (25,600 or 26,600; 11,300 or
+  13,300) and a school-fees balance (17,000 or 14,000).
+- p100: a school-fees loan read as 14,000 (could be 17,000).
+- p101: an emergency balance read as 15,000 (the next page starts at 15,100).
+- p102: a school-fees loan dated 19/5/2021 on the May 2022 page.
+- p104: a repayment written as 90,000 where the balance implies 10,000; a note
+  records 26,750 paid in error and counted in that day's repayment.
+- p105: balances partly cut off at the right edge.
+
+## 2023 (chama_b_p110 – p121)
+
+**Coverage.** January–December; p110 (January) has only "2023".
+
+**Layout seen.** Repayments include interest until August; the Interest column
+returns from September. Two loans given in April are written in the table with
+only the amount (p113). Members' prepaid contributions are recorded as notes
+("Pre-paid January", "350 paid January").
+
+**Things to check:** p111 a school-fees balance read as 26,000 (could be
+25,000).
+
+## 2024 (chama_b_p122 – p133)
+
+**Coverage.** January–December, with an Interest column throughout.
+
+**Notes of interest:** at the annual meeting on 1 May 2024 members agreed a
+dividend of 10,000 each, paid by M-Pesa. Normal loans reach 290,000–350,000.
+Several balances are written as the amount with "cleared" above it: the loan
+was cleared after the meeting and a bigger loan taken (typed as `cleared`).
+
+**Things to check:** p125 a loan dated "?/4/2023" on the April 2024 page.
+
+## 2025 (chama_b_p134 – p145)
+
+**Coverage.** January–December; p134 (January) has no date.
+
+**Notes of interest:** loans of 300,000–350,000; several are "topped up" in
+two instalments (for example 168,000 then 14,000 to make 350,000), noted in the
+loans lists. Members who prepay contributions are written "Paid up to …".
+
+**Things to check:**
+- p135: the day of one loan date (300,000) is unclear.
+- p136: one line with a crossed-out repayment and interest (the member paid
+  two months' interest on 25/3/2025).
+- p145: one monthly contribution could be read as 850.
+
+## 2026 (chama_b_p146 – p149, January – April)
+
+**Coverage.** January to 5 April 2026, the last page photographed.
+
+**Things to check:**
+- p149: a loan written "23000" (230,000 by the balance and interest).
+- p149: an emergency balance read as 20,300 (could be 20,000); the line is
+  marked "Em." but continues a school-fees loan.
+
+## Names across the years
+
+Some members' names are written differently over the years: a surname
+misspelled on one page, a first name shortened, a different surname from 2023
+or 2024. The name review file lists every spelling with the suggested member;
+the pipeline's balance continuity shows which spellings belong together.

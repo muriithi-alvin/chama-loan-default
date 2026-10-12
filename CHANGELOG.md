@@ -6,6 +6,28 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
 ## [Unreleased] — branch `m1-data-pipeline`
 
+### Added — the whole ledger extracted (2021 to April 2026)
+- **2021–2026 extracted** from photos p086–p149 into `2021.xlsx` … `2026.xlsx`
+  (local only). With 2014–2020 the ledger is complete: 148 meetings (January
+  2014 – 5 April 2026), 1,799 member lines, 174 listed loans. Every page's
+  doubts are listed in the extraction log.
+- Extraction rules 16–19 (new loan written only as the balance after, penalty
+  lines, struck-through lines, the separate interest column from July 2022).
+- Cleaning: a new loan written only in the balance-after column is a
+  `loan_given` line; a payment with no loan before or after is
+  `repayment_only`; a line with only a contribution note is `no_loan`; `=`
+  means nothing; `Er` is an emergency mark; dates such as "September 1st 2024"
+  are read. dbt unit tests cover these.
+- Loan linking prefers an earlier line of the same loan type (decision D-015);
+  `loan_lines.opening_balance` for loans that open in the balance-after column.
+- `docs/milestone_1_report.md` rewritten as the full Milestone 1 report.
+
+### Found in 2021–2026
+- Normal loans grew from about 45,000 (2014) to 250,000–350,000 (2023–2025)
+  and are repaid over two years or more, so the 12-month rule marks many of
+  them late or overdue. To discuss with the Chama before defining default.
+
+
 ### Added — 2016 to 2020 extracted
 - **2016–2020 extracted** from photos p025–p085 into one workbook per year
   (local only): 60 meetings, 710 statement rows, 55 listed loans. p048 (Dec

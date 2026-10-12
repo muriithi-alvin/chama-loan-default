@@ -75,7 +75,7 @@ issued as (
         starts.member_code,
         starts.page_no as first_page,
         starts.meeting_month as first_month,
-        starts.loan_before as first_balance,
+        starts.opening_balance as first_balance,
         starts.line_kind as first_line_kind,
         starts.repayment as first_repayment,
         listed.loan_type as listed_type,
@@ -95,7 +95,7 @@ issued as (
             else 'estimated'
         end as issue_source,
         case
-            when starts.line_kind = 'loan_given' then starts.loan_before
+            when starts.line_kind = 'loan_given' then starts.opening_balance
             else listed.amount
         end as amount_given,
         coverage.last_page as records_last_page,
@@ -110,15 +110,15 @@ issued as (
         from {{ ref('new_loans') }} as new_loans
         where new_loans.chama_id = starts.chama_id
             and new_loans.member_code = starts.member_code
-            and abs(new_loans.amount - starts.loan_before)
-                <= greatest(starts.loan_before * {{ var('carry_tolerance') }}, 100)
+            and abs(new_loans.amount - starts.opening_balance)
+                <= greatest(starts.opening_balance * {{ var('carry_tolerance') }}, 100)
             and case
                 when starts.line_kind = 'loan_given' then new_loans.page_no = starts.page_no
                 else new_loans.page_no = starts.page_no - 1
                     or (new_loans.page_no = starts.page_no
                         and new_loans.loan_month < starts.meeting_month)
             end
-        order by abs(new_loans.amount - starts.loan_before), new_loans.page_no desc
+        order by abs(new_loans.amount - starts.opening_balance), new_loans.page_no desc
         limit 1
     ) as listed on true
     left join lateral (
