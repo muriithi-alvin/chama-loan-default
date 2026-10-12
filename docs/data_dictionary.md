@@ -26,7 +26,7 @@ Every sheet ends with `source_photo` (the photo the row was read from) and
 | `meeting_date` | Date at the top of the page, as written (blank if none) |
 | `line_no` | Row number written in the ledger |
 | `member_name` | Name as written |
-| `monthly` | Monthly column as written: `350`, `SF`, `Emergency`, `paid Feb` |
+| `monthly` | Monthly contribution as written (from December 2016): `300`, `500+200`, `SF` |
 | `loan_before` | Balance before the meeting |
 | `repayment` | Amount repaid at the meeting |
 | `interest` | Rate (`2%`) or amount (`2100`), as written |
@@ -69,8 +69,9 @@ Every sheet ends with `source_photo` (the photo the row was read from) and
 | 2015 | Loan · Loan repayment · Loan balance · Month due · % (Jan–Apr); Loan · Payment · Loan balance · Due (from June, % column gone); some pages have no headings | loan_before · repayment · loan_after · due · interest |
 | 2016–2017 | Loan · Repay · Bal · Due | loan_before · repayment · loan_after · due |
 | 2018 | (loan) · (repayment) · (balance) · 350 | loan_before · repayment · loan_after · monthly |
-| 2021 | Monthly · Loan due · Loan repayment · Loan balance | monthly · loan_before · repayment · loan_after |
-| 2022 | Monthly · Current loan balance · Loan reduction · Interest · Balance | monthly · loan_before · repayment · interest · loan_after |
+| 2021 | Monthly · Loan due · Loan repayment · Loan balance (school-fees lines marked SF) | monthly · loan_before · repayment · loan_after |
+| 2022 | Monthly · Loan due · Repayment · Loan balance; from July Monthly · Loan due · Repayment (or Loan reduction) · Interest · Loan balance, where the repayment is principal only | monthly · loan_before · repayment · interest · loan_after |
+| 2023–2024 | Monthly · Loan due · Loan repayment · Interest · Loan balance (Interest column from September 2023) | monthly · loan_before · repayment · interest · loan_after |
 | 2025–2026 | Monthly payment · Loan due · Loan repayment · Interest paid · Loan balance | monthly · loan_before · repayment · interest · loan_after |
 
 This table is updated as each year is extracted.
@@ -100,6 +101,23 @@ This table is updated as each year is extracted.
 12. When a figure is ambiguous (a 5 that looks like a 9), type the reading that
     fits the sums and the next page, mark `unclear = Y` and give the other
     reading in `remarks`.
+13. **Retakes.** When a page is photographed again later (because the first
+    photo is unreadable), type it under the first photo's number, so pages stay
+    in ledger order, and name the retake in `Meetings.notes`. The retake gets no
+    rows of its own.
+14. A due month whose year is cut off at the photo edge is typed as the month
+    only (`Sept`, not `Sept 201`); the pipeline infers the year.
+15. Emergency marks in any position (`Em`, `E`, `(E)`, `Emergency` beside the
+    name, in the monthly or due column, or in the line-number column) go in
+    `Statements.loan_type`.
+16. A new loan written only in the balance-after column ("- | - | 150,000") is
+    typed as written; the pipeline reads it as a loan given that day.
+17. A penalty paid as its own line: "Penalty" in `monthly`, the amount in
+    `repayment`.
+18. A line struck through in the ledger is not typed; its values go in
+    `Meetings.notes`.
+19. From July 2022 interest is written as an amount in its own column: type it
+    in `interest`. The repayment column then holds the principal only.
 
 ---
 

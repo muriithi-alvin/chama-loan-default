@@ -4,8 +4,9 @@
 -- line_kind:
 --   balance        a running loan: balance before, repayment, balance after
 --   loan_given     only a balance is written: a loan given at this meeting
+--                  (in the balance-before column, or only in the balance after)
 --   repayment_only a repayment with no balance (cannot be tied to a loan)
---   no_loan        only dashes: the member has no loan this month
+--   no_loan        only dashes or a contribution: no loan this month
 --   empty          a name with nothing else
 
 with source as (
@@ -69,11 +70,12 @@ due_parts as (
         *,
         coalesce(
             {{ month_number("substring(due_clean from '^([a-z]+)')") }},
-            case when due_clean ~ '^[0-9]{1,2}/[0-9]{2,4}$' then split_part(due_clean, '/', 1)::int end
+            case when due_clean ~ '^[0-9]{1,2}/([0-9]{2}|[0-9]{4})$' then split_part(due_clean, '/', 1)::int end
         ) as due_month_no,
         coalesce(
-            substring(due_clean from '^[a-z]+\s*([0-9]{2,4})$'),
-            substring(due_clean from '^[0-9]{1,2}/([0-9]{2,4})$')
+            -- a year cut off to three digits ("Sept 201") counts as no year
+            substring(due_clean from '^[a-z]+\s*([0-9]{4}|[0-9]{2})$'),
+            substring(due_clean from '^[0-9]{1,2}/([0-9]{4}|[0-9]{2})$')
         ) as due_year_text
     from with_meeting
 ),
@@ -100,10 +102,10 @@ parsed as (
             end
         end as due_month,
         due_month_no is not null and due_year_text is null as due_year_inferred,
-        -- Mark beside the name: Em / Eme / (Em) = emergency
+        -- Mark beside the name: Em / Eme / (Em) / (E) = emergency
         case
             when loan_type_text = '' then null
-            when loan_type_text like 'em%' then 'emergency'
+            when loan_type_text in ('e', 'er') or loan_type_text like 'em%' then 'emergency'
             when loan_type_text in ('sf', 's/f') or loan_type_text like 'school%' then 'school_fees'
             when loan_type_text like 'top%up%' then 'top_up'
             else 'other'
@@ -115,11 +117,21 @@ final as (
     select
         *,
         case
-            when loan_before is null and repayment is null and loan_after is null then 'empty'
+            -- only a contribution note ("Paid up to Jan 2025"): no loan this month
+            when loan_before is null and repayment is null and loan_after is null
+                then case when {{ is_written('monthly_text') }} then 'no_loan' else 'empty' end
             when coalesce(loan_before, 0) = 0 and coalesce(repayment, 0) = 0
                 and coalesce(loan_after, 0) = 0 then 'no_loan'
+            -- a new loan written only as the balance after: "- | - | 150,000"
+            when coalesce(loan_before, 0) = 0 and coalesce(repayment, 0) = 0
+                and loan_after > 0 then 'loan_given'
+            -- a payment with no loan before or after (a penalty, a stray repayment)
+            when coalesce(loan_before, 0) = 0 and coalesce(loan_after, 0) = 0 then 'repayment_only'
             when loan_before is null then 'repayment_only'
-            when repayment is null and loan_after is null then 'loan_given'
+            -- only a balance written (a "?" or other unreadable value is not blank)
+            when repayment is null and loan_after is null
+                and not {{ is_written('repayment_text') }}
+                and not {{ is_written('loan_after_text') }} then 'loan_given'
             else 'balance'
         end as line_kind
     from parsed
@@ -172,7 +184,8 @@ select
             then 'interest_unparsed' end,
         case when {{ is_written('loan_after_text') }} and loan_after is null
             then 'loan_after_unparsed' end,
-        case when {{ is_written('due_text') }} and due_month is null then 'due_unparsed' end,
+        case when {{ is_written('due_text') }} and due_month is null
+            and due_clean not like 'clear%' then 'due_unparsed' end,
         case when loan_type = 'other' then 'loan_type_unrecognised' end,
         case when line_kind = 'empty' then 'empty_line' end
     ), '') as issues,

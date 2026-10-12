@@ -15,9 +15,12 @@
 --   ledger_year_inferred  written without a year
 --   rule                  not written: loan_term_days (emergency_term_days for
 --                         emergency loans) after it was given
--- status: repaid_on_time, repaid_late, repaid (no due date known), overdue,
---   open (not yet due when the records end), open_no_due_date, lost_track
---   (the loan stops appearing while the records go on)
+-- status: repaid_on_time, repaid_late, repaid (no due date known),
+--   topped_up (the unpaid balance was rolled into a bigger loan of the same
+--   member and type that starts within max_pages_between_lines pages; see
+--   rolled_into_loan_id), overdue, open (not yet due when the records end),
+--   open_no_due_date, lost_track (the loan stops appearing while the records
+--   go on)
 
 with lines as (
     select * from {{ ref('loan_lines') }}
@@ -43,6 +46,7 @@ summary as (
         loan_id,
         count(*) as line_count,
         max(page_no) as last_page,
+        max(meeting_month) as last_month,
         min(meeting_month) filter (where closing_balance = 0) as cleared_month,
         max(interest_rate_pct) as max_interest_rate_pct,
         sum(coalesce(repayment, 0)) as total_repaid,
@@ -71,7 +75,7 @@ issued as (
         starts.member_code,
         starts.page_no as first_page,
         starts.meeting_month as first_month,
-        starts.loan_before as first_balance,
+        starts.opening_balance as first_balance,
         starts.line_kind as first_line_kind,
         starts.repayment as first_repayment,
         listed.loan_type as listed_type,
@@ -91,7 +95,7 @@ issued as (
             else 'estimated'
         end as issue_source,
         case
-            when starts.line_kind = 'loan_given' then starts.loan_before
+            when starts.line_kind = 'loan_given' then starts.opening_balance
             else listed.amount
         end as amount_given,
         coverage.last_page as records_last_page,
@@ -106,15 +110,15 @@ issued as (
         from {{ ref('new_loans') }} as new_loans
         where new_loans.chama_id = starts.chama_id
             and new_loans.member_code = starts.member_code
-            and abs(new_loans.amount - starts.loan_before)
-                <= greatest(starts.loan_before * {{ var('carry_tolerance') }}, 100)
+            and abs(new_loans.amount - starts.opening_balance)
+                <= greatest(starts.opening_balance * {{ var('carry_tolerance') }}, 100)
             and case
                 when starts.line_kind = 'loan_given' then new_loans.page_no = starts.page_no
                 else new_loans.page_no = starts.page_no - 1
                     or (new_loans.page_no = starts.page_no
                         and new_loans.loan_month < starts.meeting_month)
             end
-        order by abs(new_loans.amount - starts.loan_before), new_loans.page_no desc
+        order by abs(new_loans.amount - starts.opening_balance), new_loans.page_no desc
         limit 1
     ) as listed on true
     left join lateral (
@@ -131,6 +135,7 @@ typed as (
         issued.*,
         summary.line_count,
         summary.last_page,
+        summary.last_month,
         summary.cleared_month,
         summary.max_interest_rate_pct,
         summary.total_repaid,
@@ -175,6 +180,26 @@ with_due as (
     from due
 ),
 
+rolled as (
+    -- An unpaid loan followed within a few pages by a bigger loan of the same
+    -- member and type: the balance was rolled into the new loan (a top-up
+    -- that the list of new loans does not show).
+    select distinct on (old.loan_id)
+        old.loan_id,
+        new.loan_id as rolled_into_loan_id
+    from with_due as old
+    inner join with_due as new
+        on new.chama_id = old.chama_id
+        and new.member_code = old.member_code
+        and new.loan_type = old.loan_type
+        and new.loan_id <> old.loan_id
+        and new.first_page > old.last_page
+        and new.first_page <= old.last_page + {{ var('max_pages_between_lines') }}
+        and new.first_balance >= old.last_balance
+    where old.cleared_month is null and old.last_balance > 0
+    order by old.loan_id, new.first_page
+),
+
 at_due as (
     select distinct on (lines.loan_id)
         lines.loan_id,
@@ -203,9 +228,10 @@ select
     with_due.cleared_month,
     with_due.last_balance,
     -- 0 if repaid by the due month; otherwise only known when the due month
-    -- falls inside the records
+    -- falls inside the records (for a topped-up loan: before it was rolled over)
     case
         when with_due.cleared_month <= with_due.due_month then 0
+        when rolled.loan_id is not null and with_due.due_month > with_due.last_month then null
         when with_due.due_month <= with_due.observed_until
             then coalesce(at_due.balance_at_due, with_due.first_balance)
     end as outstanding_at_due,
@@ -217,12 +243,14 @@ select
         when with_due.cleared_month is not null and with_due.due_month is null then 'repaid'
         when with_due.cleared_month <= with_due.due_month then 'repaid_on_time'
         when with_due.cleared_month is not null then 'repaid_late'
+        when rolled.loan_id is not null then 'topped_up'
         when with_due.last_page
             < with_due.records_last_page - {{ var('max_pages_between_lines') }} then 'lost_track'
         when with_due.due_month is null then 'open_no_due_date'
         when with_due.due_month < with_due.observed_until then 'overdue'
         else 'open'
     end as status,
+    rolled.rolled_into_loan_id,
     with_due.line_count,
     with_due.first_month,
     with_due.first_page,
@@ -231,3 +259,4 @@ select
     with_due.any_unclear
 from with_due
 left join at_due on at_due.loan_id = with_due.loan_id
+left join rolled on rolled.loan_id = with_due.loan_id

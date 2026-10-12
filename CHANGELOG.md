@@ -6,6 +6,51 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
 ## [Unreleased] — branch `m1-data-pipeline`
 
+### Added — the whole ledger extracted (2021 to April 2026)
+- **2021–2026 extracted** from photos p086–p149 into `2021.xlsx` … `2026.xlsx`
+  (local only). With 2014–2020 the ledger is complete: 148 meetings (January
+  2014 – 5 April 2026), 1,799 member lines, 174 listed loans. Every page's
+  doubts are listed in the extraction log.
+- Extraction rules 16–19 (new loan written only as the balance after, penalty
+  lines, struck-through lines, the separate interest column from July 2022).
+- Cleaning: a new loan written only in the balance-after column is a
+  `loan_given` line; a payment with no loan before or after is
+  `repayment_only`; a line with only a contribution note is `no_loan`; `=`
+  means nothing; `Er` is an emergency mark; dates such as "September 1st 2024"
+  are read. dbt unit tests cover these.
+- Loan linking prefers an earlier line of the same loan type (decision D-015);
+  `loan_lines.opening_balance` for loans that open in the balance-after column.
+- `docs/milestone_1_report.md` rewritten as the full Milestone 1 report.
+
+### Found in 2021–2026
+- Normal loans grew from about 45,000 (2014) to 250,000–350,000 (2023–2025)
+  and are repaid over two years or more, so the 12-month rule marks many of
+  them late or overdue. To discuss with the Chama before defining default.
+
+
+### Added — 2016 to 2020 extracted
+- **2016–2020 extracted** from photos p025–p085 into one workbook per year
+  (local only): 60 meetings, 710 statement rows, 55 listed loans. p048 (Dec
+  2017) is blurred; its retake p051 is typed under p048 (extraction rule 13).
+  What to check on each page is in the extraction log.
+- Cleaning: a written month without a day ("May 2016", "Nov/17") dates a
+  page (`date_source = written_month`); a due year cut off to three digits
+  counts as no year; `E` / `(E)` is an emergency mark; "Cleared" in the due
+  column is not flagged; a line with an unreadable value is no longer taken
+  for a new loan.
+- Loans: a balance-only line can continue an open loan; new status
+  `topped_up` (an unpaid balance rolled into a bigger loan of the same member,
+  with `rolled_into_loan_id`); the "balance grows too much" check allows 1%
+  for rounding.
+- Extraction rules 13–15 (retakes, cut-off due years, emergency marks).
+
+### Found in 2016–2020 (to raise with the Chama)
+- From 2017 emergency loans run 2–3 months at 3% rather than being repaid at
+  the next meeting at 5%; `emergency_term_days: 31` marks most of them late.
+- One member stops appearing after January 2020 with 89,640 outstanding; two
+  normal loans are overdue at the end of 2020.
+
+
 ### Added — 2015 extracted; closing Milestone 1
 - **2015 extracted** from photos p013–p024 into `data/raw/chama_b/2015.xlsx`
   (local only): 12 meetings, 141 statement rows, 12 new loans; 20 rows flagged

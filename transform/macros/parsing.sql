@@ -4,12 +4,12 @@
 
 
 {#- Amount -> number. Handles "40,000", "46 000", "59,000/=", "92,400/-", "Ksh. 43,571",
-    "300k" and sums such as "5500 + 776". "-" and "nil" mean nothing (0). -#}
+    "300k" and sums such as "5500 + 776". "-", "=" and "nil" mean nothing (0). -#}
 {% macro parse_amount(column) -%}
 (
     select case
         when v is null then null
-        when v in ('-', '–', '—', 'nil') then 0
+        when v in ('-', '–', '—', '=', 'nil') then 0
         when v ~ '^[0-9]+(\.[0-9]+)?k$' then rtrim(v, 'k')::numeric * 1000
         when v ~ '^[0-9]+(\.[0-9]+)?(\+[0-9]+(\.[0-9]+)?)*$'
             then (select sum(part::numeric) from unnest(string_to_array(v, '+')) as part)
@@ -44,9 +44,34 @@
 {%- endmacro %}
 
 
-{#- Date written in words -> date: "7th June 2015", "8th/March/2015".
-    Needs a day, a month name and a four-digit year; otherwise null. -#}
+{#- Date written in words -> date: "7th June 2015", "8th/March/2015",
+    "September 1st 2024". Needs a day, a month name and a four-digit year;
+    otherwise null. -#}
 {% macro parse_text_date(column) -%}
+coalesce({{ _parse_day_month_year(column) }}, {{ _parse_month_day_year(column) }})
+{%- endmacro %}
+
+
+{% macro _parse_month_day_year(column) -%}
+(
+    select case when m is not null and d between 1 and 31 then
+        case when d <= extract(day from make_date(y, m, 1) + interval '1 month' - interval '1 day')
+            then make_date(y, m, d)
+        end
+    end
+    from (
+        select
+            {{ month_number("substring(v from '^([a-z]+)')") }} as m,
+            substring(v from '^[a-z]+[^a-z0-9]+([0-9]{1,2})')::int as d,
+            substring(v from '([0-9]{4})$')::int as y
+        from (select lower(trim({{ column }})) as v) as raw_value
+        where lower(trim({{ column }})) ~ '^[a-z]+[^a-z0-9]+[0-9]{1,2}(st|nd|rd|th)?[^a-z0-9]+[0-9]{4}$'
+    ) as parts
+)
+{%- endmacro %}
+
+
+{% macro _parse_day_month_year(column) -%}
 (
     select case when m is not null and d between 1 and 31 then
         case when d <= extract(day from make_date(y, m, 1) + interval '1 month' - interval '1 day')
@@ -61,6 +86,24 @@
         from (select lower(trim({{ column }})) as v) as raw_value
         where lower(trim({{ column }})) ~ '^[0-9]{1,2}(st|nd|rd|th)?[^a-z0-9]+[a-z]+[^a-z0-9]+[0-9]{4}$'
     ) as parts
+)
+{%- endmacro %}
+
+
+{#- Month and year without a day -> first of that month: "May 2016",
+    "Nov. 2016", "Nov/17", "Nov '17" (two-digit years are 20xx). -#}
+{% macro parse_month_year(column) -%}
+(
+    select make_date(case when length(y) = 2 then 2000 + y::int else y::int end, m, 1)
+    from (
+        select
+            {{ month_number("substring(v from '^([a-z]+)')") }} as m,
+            substring(v from '([0-9]{4}|[0-9]{2})$') as y
+        from (select lower(regexp_replace(trim({{ column }}), '[.,]', '', 'g')) as v) as raw_value
+        where lower(regexp_replace(trim({{ column }}), '[.,]', '', 'g'))
+            ~ '^[a-z]+\s*[/''-]?\s*([0-9]{4}|[0-9]{2})$'
+    ) as parts
+    where m is not null
 )
 {%- endmacro %}
 
@@ -92,5 +135,5 @@ substring(lower({{ column }}) from '_p([0-9]+)\.[a-z]+$')::int
 
 {#- True when the ledger cell has something other than blank or a dash. -#}
 {% macro is_written(column) -%}
-coalesce(trim({{ column }}), '') not in ('', '-', '–', '—')
+coalesce(trim({{ column }}), '') not in ('', '-', '–', '—', '=')
 {%- endmacro %}

@@ -19,6 +19,7 @@ rejected. Newest last. Change a decision by adding a new one that replaces it.
 | D-012 | 2026-10-08 | Loan term is 12 months; later written due months are per-loan extensions |
 | D-013 | 2026-10-08 | Statements gain a `loan_type` column for the emergency mark |
 | D-014 | 2026-10-08 | Milestone 1 closes with Chama B only |
+| D-015 | 2026-10-12 | Loan linking prefers lines of the same loan type |
 
 ---
 
@@ -189,3 +190,14 @@ which is which.
 **Decision.** Chama A has no ledger data yet. Milestone 1 closes on Chama B;
 Chama A stays in `config/pipeline.yaml` and is picked up automatically when its
 Excel files appear in `data/raw/chama_a/`.
+
+## D-015 Linking prefers the same loan type
+**Context.** From 2021 members often hold a normal, a school-fees and an
+emergency loan at once, sometimes with equal balances (for example a 30,000
+emergency loan beside a 30,000 school-fees balance). Matching on balance alone
+could join the wrong pair.
+**Decision.** When a line could continue more than one earlier line, it takes
+one of the same loan type first (normal, emergency, school fees), then the
+nearest page, then the closest balance. A line of another type is still used
+when no same-type line matches, because the ledger sometimes marks one loan
+differently from month to month. Extends D-010.

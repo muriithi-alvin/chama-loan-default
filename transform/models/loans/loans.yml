@@ -48,6 +48,8 @@ models:
                 values: [ledger, ledger_year_inferred, rule]
       - name: rule_due_month
         description: Due month by the loan_term_days rule, for comparing with the ledger
+      - name: rolled_into_loan_id
+        description: For a topped_up loan, the loan its unpaid balance was rolled into
       - name: outstanding_at_due
         description: Balance at the due month; 0 if repaid by then; empty if the due month is after the records end
       - name: status
@@ -55,13 +57,14 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: [repaid_on_time, repaid_late, repaid, overdue, open, open_no_due_date, lost_track]
+                values: [repaid_on_time, repaid_late, repaid, topped_up, overdue, open, open_no_due_date, lost_track]
 
 unit_tests:
   - name: lines_are_chained_into_loans
     description: >
       A loan repaid over pages 1-3 with a top-up, a missed meeting (page 4) and
-      a separate emergency loan; plus a repayment with no balance.
+      a separate emergency loan; a repayment with no balance; and two loans of
+      different types with the same balance, each continuing its own type.
     model: loan_lines
     given:
       - input: ref('statements')
@@ -78,6 +81,14 @@ unit_tests:
              loan_before: 28600, repayment: 600, closing_balance: 28000}
           - {line_id: r, chama_id: c, member_code: M-2, page_no: 1, line_on_page: 2, line_kind: repayment_only,
              repayment: 3300}
+          - {line_id: s1, chama_id: c, member_code: M-3, page_no: 1, line_on_page: 3, line_kind: balance,
+             loan_type: school_fees, loan_before: 40000, repayment: 10000, closing_balance: 30000}
+          - {line_id: e1, chama_id: c, member_code: M-3, page_no: 1, line_on_page: 4, line_kind: loan_given,
+             loan_type: emergency, loan_before: 30000, closing_balance: 30000}
+          - {line_id: e2, chama_id: c, member_code: M-3, page_no: 2, line_on_page: 3, line_kind: balance,
+             loan_type: emergency, loan_before: 30000, repayment: 5000, closing_balance: 25000}
+          - {line_id: s2, chama_id: c, member_code: M-3, page_no: 2, line_on_page: 4, line_kind: balance,
+             loan_type: school_fees, loan_before: 30000, repayment: 5000, closing_balance: 25000}
       - input: ref('new_loans')
         rows:
           - {chama_id: c, member_code: M-1, page_no: 2, amount: 10000}
@@ -91,3 +102,7 @@ unit_tests:
         - {line_id: g, loan_id: c-p001-1, line_seq: 4, link: continued, carry_difference: 300, top_up_amount: null}
         - {line_id: r, loan_id: null, line_seq: null, link: repayment_unlinked, carry_difference: null,
            top_up_amount: null}
+        - {line_id: s1, loan_id: c-p001-3, line_seq: 1, link: start, carry_difference: null, top_up_amount: null}
+        - {line_id: e1, loan_id: c-p001-4, line_seq: 1, link: start, carry_difference: null, top_up_amount: null}
+        - {line_id: e2, loan_id: c-p001-4, line_seq: 2, link: continued, carry_difference: 0, top_up_amount: null}
+        - {line_id: s2, loan_id: c-p001-3, line_seq: 2, link: continued, carry_difference: 0, top_up_amount: null}
