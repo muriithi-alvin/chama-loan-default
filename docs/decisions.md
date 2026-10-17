@@ -20,6 +20,11 @@ rejected. Newest last. Change a decision by adding a new one that replaces it.
 | D-013 | 2026-10-08 | Statements gain a `loan_type` column for the emergency mark |
 | D-014 | 2026-10-08 | Milestone 1 closes with Chama B only |
 | D-015 | 2026-10-12 | Loan linking prefers lines of the same loan type |
+| D-016 | 2026-10-16 | Models train in Colab; only the codes-only modelling table goes to Google Drive |
+| D-017 | 2026-10-16 | The GitHub repository is private |
+| D-018 | 2026-10-16 | Point-in-time features and a provisional default label, built in dbt |
+| D-019 | 2026-10-16 | MLflow experiment tracking starts in Milestone 2 |
+| D-020 | 2026-10-16 | Walk-forward testing; imbalance strategies compared, not assumed |
 
 ---
 
@@ -201,3 +206,115 @@ one of the same loan type first (normal, emergency, school fees), then the
 nearest page, then the closest balance. A line of another type is still used
 when no same-type line matches, because the ledger sometimes marks one loan
 differently from month to month. Extends D-010.
+
+## D-016 Train in Colab; only the modelling table goes to Drive
+**Context.** The supervisor's Sprint II workflow is: code on the laptop, push
+to GitHub, open notebooks in Google Colab, read data from and save models,
+metrics and plots to Google Drive, then review the synced results locally.
+In M1 the cloud tools were set aside because the data names real people
+(D-001).
+**Decision.** Follow the workflow, with one boundary: the only data that
+leaves this computer is `analytics.loan_features`, written by
+`python -m chama.pipeline export` as `loan_features.parquet` with a manifest.
+It holds member codes, loan types, amounts, months and features: no names and
+no free text. The export stops if the table gains a column not on its list or
+if any value contains a word of a member's name. Workbooks, photos, review
+files, the `raw` and `private` schemas and the pseudonym key never leave.
+`DRIVE_DIR` in `.env` names the project folder on Drive; it holds `data/` (the
+export) and `mlruns/` (models, metrics, plots).
+**Why.** Colab gives the supervisor an environment to open and rerun; it is
+not needed for speed (a few hundred loans train in seconds). The export keeps
+D-001's promise: everything outside this computer sees codes only.
+**Consequences.** Pseudonymised data is still personal data: with about a
+dozen members, someone who knows the group could recognise a member from loan
+sizes and dates. The officials confirmed on 2026-10-16 that their permission
+covers storing it on Google Drive. Notebooks also run locally from the same folder
+(synced by Drive for desktop), so work does not depend on Colab.
+
+## D-017 Private GitHub repository
+**Context.** In the workflow, Colab saves notebook changes straight to GitHub,
+outputs included, without passing through local git or its checks. Outputs
+show member codes, amounts and dates.
+**Decision.** The repository is private (changed 2026-10-16; it had no stars,
+forks or Pages site). The supervisor is added as a collaborator.
+**Consequences.** Colab needs GitHub authorisation to open notebooks, and a
+read-only access token stored in Colab Secrets to install the `chama` package
+from the repository. Outputs in notebooks hold nothing beyond what D-016
+allows, because notebooks read only the exported table.
+
+## D-018 Point-in-time features and a provisional label
+**Context.** Section 11 of the M1 report showed the 12-month rule does not
+describe practice, so the default label must be agreed with the Chama. Work
+cannot wait for that.
+**Decision.** `analytics.loan_features` (dbt) has one row per loan with a known
+issue month. Features use only meetings before the issue month and earlier
+loans as they stood then; a dbt unit test checks this on made-up loans.
+`defaulted` is 1 when the status is in `default_statuses` in
+`config/pipeline.yaml`, provisionally `topped_up`, `overdue` and `lost_track`;
+0 for other finished loans; empty while the outcome is unknown.
+**Why.** Features in dbt are tested and rebuilt with the data, and the M4
+dashboard can reuse them; notebooks only model. Keeping the label rule in the
+config means the agreed definition changes one line.
+**Update 2026-10-16.** Confirmed: an overdue loan is a default. `topped_up` and
+`lost_track` stay provisional. All six overdue loans (2023–2025) are normal
+loans of 250,000–350,000 with no due month written, so they are judged by the
+12-month rule while still being repaid; if the Chama agreed a longer term for
+large loans, `loan_term_days` should say so, or these count as defaults.
+**Consequences.** `lost_track` is in the label, so unlinked name spellings now
+create false defaults. The warning test `loan_continues_under_another_member`
+lists loans that seem to continue under another member code; these must be
+resolved in the name review before training.
+
+## D-019 MLflow tracking starts in Milestone 2
+**Decision.** Training runs log their settings, metrics, plots, SHAP results
+and the model to MLflow from the first model. In Colab the tracking folder is
+`mlruns/` on Drive; locally `mlflow ui` reads the same folder through Drive
+for desktop. Milestone 3 keeps the model registry, serving, Evidently
+monitoring, Docker and scheduling.
+**How.** MLflow 3 keeps folder tracking in maintenance mode and refuses it
+unless `MLFLOW_ALLOW_FILE_STORE=true`; the code sets this. The recommended
+SQLite database is a single file that Colab's Drive mount and Drive for
+desktop would both write, which risks corrupting it; a folder of small files
+syncs safely. In M3 the runs can move to a database (for example the
+project's PostgreSQL) with `mlflow migrate-filestore`. Models are saved with
+cloudpickle, because MLflow's default (skops) refuses the imbalanced-learn and
+XGBoost types; they are only loaded back from the project's own folder.
+**Why.** The MLOps Zoomcamp introduces experiment tracking right after the
+first model (module 2), and the workflow's "save models, metrics, plots and
+logs" step is what MLflow does. Comparing models without it means comparing
+loose files.
+
+## D-020 Walk-forward testing; imbalance strategies compared
+**Context.** A few hundred loans from about a dozen members over twelve years,
+roughly one default in six. Random train/test splits would let a model learn
+from later loans of the same members and from outcomes nobody knew yet, and
+would overstate how well it works.
+**Decision.**
+- **Main test: walk forward.** For each year 2019–2024, train only on loans
+  given and resolved (`outcome_month`) before that year, then score that
+  year's loans; the years are pooled for the metrics. Loans given after 2024
+  have had too little time to show a default and are not tested.
+- **Second check: members held out** (grouped folds), for how the model would
+  do on a member it has not seen.
+- **Metrics:** precision-recall AUC (chance level is the share of defaults),
+  ROC AUC and the Brier score, with bootstrap 95% intervals, plus how the risk
+  bands sorted the test loans.
+- **Imbalance:** at the project owner's request, k-means based resampling is
+  included. Every model is trained four ways and compared on the same tests:
+  no correction, class weights, k-means SMOTE (synthetic defaults inside
+  k-means clusters) and k-means cluster centroids (repaid loans reduced to one
+  real loan per cluster). Resampling runs inside the training folds only.
+- **Choice:** the best walk-forward PR AUC, unless its Brier score shows the
+  scores cannot be read as risks; differences within the intervals are not
+  treated as wins.
+**Why.** A study of clinical risk models (van den Goorbergh et al., "The harm
+of class imbalance corrections for risk prediction models", JAMIA 2022) found
+that random over- and undersampling and SMOTE did not improve the ranking of
+logistic regression models and made their probabilities overestimate risk,
+which officials here would read as a member's risk. Testing the strategies on
+this data, rather than assuming they help or hurt, gives evidence either way.
+**Consequences.** The first run (labels still including the split-member
+artefacts) showed no strategy clearly ahead: k-means SMOTE was close to no
+correction for the random forest and slightly ahead for XGBoost, always with
+a worse Brier score; cluster centroids fell to chance. To repeat once the
+name review is fixed.
