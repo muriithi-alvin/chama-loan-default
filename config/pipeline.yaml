@@ -15,3 +15,32 @@ chamas:
 loan_term_days: 365
 # Emergency loans are repaid at the next meeting
 emergency_term_days: 31
+
+# Milestone 2 - the modelling table (analytics.loan_features).
+# Loan statuses that count as a default (D-018). overdue (past its due month
+# and unpaid at the end of the records) is confirmed as a default; topped_up
+# (rolled into a bigger loan while unpaid) and lost_track (stops appearing)
+# are provisional until agreed with the Chama.
+default_statuses: [topped_up, overdue, lost_track]
+# "Recent" behaviour features look back this many months before a loan is given.
+history_months: 12
+
+# Milestone 2 - training and evaluation (src/chama/models, decision D-020).
+modelling:
+  experiment: chama-loan-default   # MLflow experiment name
+  # Walk forward: each test year is scored by a model trained only on loans
+  # given, and with an outcome known, before that year. Loans given after 2024
+  # have had too little time to show a default, so they are not tested.
+  test_years: [2019, 2020, 2021, 2022, 2023, 2024]
+  min_training_defaults: 8   # skip a test year with fewer known defaults before it
+  member_folds: 5            # second check: each member's loans held out together
+  models: [logistic_regression, random_forest, xgboost]
+  # Ways to handle the imbalance (about 1 default in 6 loans), compared on the
+  # same tests: none, class weights, k-means SMOTE (adds synthetic defaults
+  # inside k-means clusters), k-means cluster centroids (keeps one repaid loan
+  # per cluster). Resampling is applied to training folds only.
+  imbalance: [none, class_weight, kmeans_smote, cluster_centroids]
+  # Risk category from the model's score (provisional, to agree with the Chama)
+  risk_bands: {medium: 0.15, high: 0.30}
+  bootstrap_samples: 1000    # for confidence intervals of the test metrics
+  random_state: 42
