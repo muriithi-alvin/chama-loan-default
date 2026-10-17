@@ -1,0 +1,155 @@
+version: 2
+
+models:
+  - name: loan_features
+    description: >
+      One row per loan with a known issue month: the member's record before
+      the loan was given (features) and how the loan ended (the label). Every
+      feature uses only meetings before the issue month (decision D-018).
+      "Recent" means the history_months before the issue month. Codes only;
+      this is the table exported for modelling (decision D-016).
+    columns:
+      - name: loan_id
+        data_tests: [unique, not_null]
+      - name: member_code
+        data_tests: [not_null]
+      - name: issued_month
+        data_tests: [not_null]
+      - name: issue_year
+        description: For splitting by time (train on earlier years, test on later ones)
+      - name: amount
+        description: Amount given (from the list of loans given), else the balance when the loan first appears
+      - name: is_rollover
+        description: An earlier unpaid loan of the member was rolled into this one
+      - name: amount_vs_own_max
+        description: Amount divided by the member's largest earlier loan of the same type; empty if none
+      - name: amount_vs_chama_median
+        description: Amount divided by the Chama's median loan of the same type in the recent months
+      - name: months_in_records
+        description: Months since the member's first line in the records (records start January 2014)
+      - name: prior_loans
+        description: The member's loans that started before this one
+      - name: prior_repaid
+        description: Earlier loans cleared before this one was given
+      - name: prior_repaid_late
+        description: Earlier loans cleared after their due month, before this one was given
+      - name: prior_rolled_over
+        description: Earlier loans rolled into a bigger loan given before this one
+      - name: open_loans_at_issue
+        description: The member's loans still carrying a balance when this one was given
+      - name: outstanding_at_issue
+        description: Total balance of those loans
+      - name: oldest_open_loan_months
+        description: Age in months of the oldest of those loans; empty if none
+      - name: recent_balance_lines
+        description: Meetings in the recent months where the member had a loan running
+      - name: recent_missed_share
+        description: Share of those meetings with no repayment; empty if none
+      - name: recent_repayment_ratio
+        description: Average repayment as a share of the balance at those meetings (capped at 1)
+      - name: recent_contribution_rate
+        description: Share of the recent meetings with recorded contributions where the member contributed; empty before 2017
+      - name: defaulted
+        description: 1 if the status is in default_statuses (provisional, D-018), 0 if not, empty while the outcome is unknown
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: in_training
+        description: The outcome is known, so models may learn from this loan
+        data_tests: [not_null]
+      - name: outcome_month
+        description: >
+          When the outcome became known (cleared; rolled into a new loan; the
+          month after falling due unpaid; or max_pages_between_lines months
+          after the last line). A model tested on a year learns only from loans
+          whose outcome was known before it (D-020). Empty while unknown.
+        data_tests:
+          - not_null:
+              config:
+                where: "in_training"
+
+unit_tests:
+  - name: features_use_only_what_was_known_at_issue
+    description: >
+      Member M-1 has a loan from before the records (X), a loan repaid late (A),
+      a loan rolled into C (B), a loan that is lost track (C) and an open
+      emergency loan (D). Lines and contributions after each issue month must
+      not count. X is left out (no issue month) but counts as an earlier loan.
+    model: loan_features
+    overrides:
+      vars:
+        default_statuses: [topped_up, overdue, lost_track]
+        history_months: 12
+        max_pages_between_lines: 3
+    given:
+      - input: ref('loans')
+        rows:
+          - {loan_id: X, chama_id: c, member_code: M-1, loan_type: normal, issue_source: before_records,
+             issued_month: null, first_month: 2019-01-01, amount_given: null, first_balance: 50000,
+             cleared_month: 2019-03-01, status: repaid_on_time, rolled_into_loan_id: null}
+          - {loan_id: A, chama_id: c, member_code: M-1, loan_type: normal, issue_source: loan_given_line,
+             issued_month: 2020-01-01, first_month: 2020-01-01, amount_given: 10000, first_balance: 10000,
+             cleared_month: 2020-06-01, status: repaid_late, rolled_into_loan_id: null}
+          - {loan_id: B, chama_id: c, member_code: M-1, loan_type: normal, issue_source: new_loans_list,
+             issued_month: 2020-04-01, first_month: 2020-05-01, amount_given: 20000, first_balance: 20000,
+             cleared_month: null, status: topped_up, rolled_into_loan_id: C}
+          - {loan_id: C, chama_id: c, member_code: M-1, loan_type: normal, issue_source: estimated,
+             issued_month: 2020-08-01, first_month: 2020-09-01, amount_given: null, first_balance: 30000,
+             cleared_month: null, status: lost_track, rolled_into_loan_id: null}
+          - {loan_id: D, chama_id: c, member_code: M-1, loan_type: emergency, issue_source: new_loans_list,
+             issued_month: 2020-10-01, first_month: 2020-11-01, amount_given: 5000, first_balance: 5000,
+             cleared_month: null, status: open, rolled_into_loan_id: null}
+      - input: ref('loan_lines')
+        rows:
+          - {loan_id: X, chama_id: c, member_code: M-1, line_seq: 1, meeting_month: 2019-01-01,
+             line_kind: balance, opening_balance: 50000, repayment: 25000, closing_balance: 25000}
+          - {loan_id: X, chama_id: c, member_code: M-1, line_seq: 2, meeting_month: 2019-03-01,
+             line_kind: balance, opening_balance: 25000, repayment: 25000, closing_balance: 0}
+          - {loan_id: A, chama_id: c, member_code: M-1, line_seq: 1, meeting_month: 2020-01-01,
+             line_kind: loan_given, opening_balance: 10000, repayment: null, closing_balance: 10000}
+          - {loan_id: A, chama_id: c, member_code: M-1, line_seq: 2, meeting_month: 2020-02-01,
+             line_kind: balance, opening_balance: 10000, repayment: 2000, closing_balance: 8000}
+          - {loan_id: A, chama_id: c, member_code: M-1, line_seq: 3, meeting_month: 2020-03-01,
+             line_kind: balance, opening_balance: 8000, repayment: 0, closing_balance: 8000}
+          - {loan_id: A, chama_id: c, member_code: M-1, line_seq: 4, meeting_month: 2020-06-01,
+             line_kind: balance, opening_balance: 8000, repayment: 8000, closing_balance: 0}
+          - {loan_id: B, chama_id: c, member_code: M-1, line_seq: 1, meeting_month: 2020-05-01,
+             line_kind: balance, opening_balance: 20000, repayment: 5000, closing_balance: 15000}
+          - {loan_id: B, chama_id: c, member_code: M-1, line_seq: 2, meeting_month: 2020-07-01,
+             line_kind: balance, opening_balance: 15000, repayment: null, closing_balance: 15000}
+          - {loan_id: C, chama_id: c, member_code: M-1, line_seq: 1, meeting_month: 2020-09-01,
+             line_kind: balance, opening_balance: 30000, repayment: 0, closing_balance: 30000}
+          - {loan_id: D, chama_id: c, member_code: M-1, line_seq: 1, meeting_month: 2020-11-01,
+             line_kind: balance, opening_balance: 5000, repayment: 0, closing_balance: 5000}
+      - input: ref('statements')
+        rows:
+          - {chama_id: c, member_code: M-1, page_no: 1, meeting_month: 2019-01-01, monthly_amount: null}
+          - {chama_id: c, member_code: M-1, page_no: 14, meeting_month: 2020-02-01, monthly_amount: 300}
+          - {chama_id: c, member_code: M-2, page_no: 14, meeting_month: 2020-02-01, monthly_amount: 300}
+          - {chama_id: c, member_code: M-1, page_no: 15, meeting_month: 2020-03-01, monthly_amount: null}
+          - {chama_id: c, member_code: M-2, page_no: 15, meeting_month: 2020-03-01, monthly_amount: 300}
+          - {chama_id: c, member_code: M-1, page_no: 21, meeting_month: 2020-09-01, monthly_amount: 300}
+    expect:
+      rows:
+        - {loan_id: A, prior_loans: 1, prior_repaid: 1, prior_repaid_late: 0, prior_rolled_over: 0,
+           is_rollover: false, open_loans_at_issue: 0, outstanding_at_issue: 0, oldest_open_loan_months: null,
+           amount_vs_own_max: 0.2, amount_vs_chama_median: null, months_in_records: 12,
+           recent_balance_lines: 2, recent_missed_share: 0, recent_repayment_ratio: 0.75,
+           recent_contribution_rate: null, defaulted: 0, in_training: true, outcome_month: 2020-06-01}
+        - {loan_id: B, prior_loans: 2, prior_repaid: 1, prior_repaid_late: 0, prior_rolled_over: 0,
+           is_rollover: false, open_loans_at_issue: 1, outstanding_at_issue: 8000, oldest_open_loan_months: 3,
+           amount_vs_own_max: 0.4, amount_vs_chama_median: 2, months_in_records: 15,
+           recent_balance_lines: 2, recent_missed_share: 0.5, recent_repayment_ratio: 0.1,
+           recent_contribution_rate: 0.5, defaulted: 1, in_training: true, outcome_month: 2020-08-01}
+        - {loan_id: C, prior_loans: 3, prior_repaid: 2, prior_repaid_late: 1, prior_rolled_over: 0,
+           is_rollover: true, open_loans_at_issue: 1, outstanding_at_issue: 15000, oldest_open_loan_months: 4,
+           amount_vs_own_max: 0.6, amount_vs_chama_median: 2, months_in_records: 19,
+           recent_balance_lines: 5, recent_missed_share: 0.4, recent_repayment_ratio: 0.29,
+           recent_contribution_rate: 0.5, defaulted: 1, in_training: true, outcome_month: 2020-12-01}
+        - {loan_id: D, prior_loans: 4, prior_repaid: 2, prior_repaid_late: 1, prior_rolled_over: 1,
+           is_rollover: false, open_loans_at_issue: 1, outstanding_at_issue: 30000, oldest_open_loan_months: 2,
+           amount_vs_own_max: null, amount_vs_chama_median: null, months_in_records: 21,
+           recent_balance_lines: 6, recent_missed_share: 0.5, recent_repayment_ratio: 0.242,
+           recent_contribution_rate: 0.667, defaulted: null, in_training: false, outcome_month: null}
