@@ -4,7 +4,57 @@ All notable changes to this project are recorded here, newest first.
 Each entry links to its issue or pull request where one exists.
 Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
-## [Unreleased] — branch `m1-data-pipeline`
+## [Unreleased] — branch `m2-features-models`
+
+### Added — modelling table and export (Milestone 2 start)
+- `analytics.loan_features` (dbt): one row per loan with features known when
+  it was given (earlier loans, loans open at issue, recent repayments and
+  contributions, size against the member's and the Chama's loans) and a
+  provisional label `defaulted` from `default_statuses` in
+  `config/pipeline.yaml` (decision D-018). A dbt unit test checks that nothing
+  after the issue month is used.
+- Warning test `loan_continues_under_another_member`: a lost-track loan whose
+  balance is picked up by another member's new loan, usually one person under
+  two unlinked spellings. 15 found in Chama B (three pairs of codes).
+- `python -m chama.pipeline export`: writes the modelling table and a manifest
+  (rows, label rule, git commit) to `<DRIVE_DIR>/data` for Colab, after checking
+  every column is cleared for export and no value holds a member's name
+  (decision D-016). Tests in `tests/test_export.py`.
+- `pyarrow` dependency; `ml` extra (scikit-learn, imbalanced-learn, XGBoost,
+  SHAP, MLflow, matplotlib). `*.parquet` ignored by git.
+- Decisions D-016 to D-019: Colab and Drive with a codes-only boundary, private
+  repository, point-in-time features and provisional label, MLflow from M2.
+
+### Added — training, testing and explanation
+- `loan_features.outcome_month`: when each outcome became known, so a test
+  year learns only from outcomes known before it. dbt unit test extended.
+- `src/chama/models/`: three models (logistic regression, random forest,
+  XGBoost) × four imbalance strategies (none, class weights, k-means SMOTE,
+  k-means cluster centroids; resampling inside training folds only);
+  walk-forward test 2019–2024 and a members-held-out check; PR AUC, ROC AUC
+  and Brier score with bootstrap intervals; risk bands; SHAP explanations
+  (decision D-020). Settings under `modelling:` in `config/pipeline.yaml`.
+- `python -m chama.pipeline train`: runs every combination and logs each to
+  MLflow (params, data version, metrics, plots, scores, the final model).
+  Tests in `tests/test_models.py` (made-up loans).
+- Notebooks `01_explore_features`, `02_train_and_compare`, `03_explain_risk`,
+  runnable in Colab (first cell mounts Drive and fetches the code with a
+  token from Colab Secrets) and locally.
+- `DRIVE_DIR` in `.env` (replaces `EXPORT_DIR`): the project folder on Google
+  Drive, holding `data/` and `mlruns/`.
+
+### Changed
+- The GitHub repository is private (D-017).
+- D-016: the officials confirmed that their permission covers keeping the
+  codes-only table on Google Drive.
+
+### Found
+- The database built from the merged M1 code gives 277 loans, 17 member codes
+  and 21 lost-track loans, not the 263, 13 and 7 in the M1 report. About 11 of
+  the lost-track loans continue under a second code for the same person;
+  their spellings need linking in the name review.
+
+## M1 — branch `m1-data-pipeline` (merged)
 
 ### Added — the whole ledger extracted (2021 to April 2026)
 - **2021–2026 extracted** from photos p086–p149 into `2021.xlsx` … `2026.xlsx`
