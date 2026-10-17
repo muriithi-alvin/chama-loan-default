@@ -11,9 +11,9 @@ the final decision stays with the officials.
 
 | Milestone | Focus | Status |
 | --- | --- | --- |
-| M1 | Data pipeline: ingest, anonymise, validate, clean | In progress |
-| M2 | Features and models (Logistic Regression, Random Forest, XGBoost, SHAP) | Planned |
-| M3 | MLOps: MLflow tracking, monitoring with Evidently, Docker | Planned |
+| M1 | Data pipeline: ingest, anonymise, validate, clean | Done |
+| M2 | Features and models (Logistic Regression, Random Forest, XGBoost, SHAP), MLflow tracking, trained in Colab | In progress |
+| M3 | MLOps: model registry, monitoring with Evidently, Docker | Planned |
 | M4 | Dashboard for officials (Streamlit) | Planned |
 | M5 | Report and defence | Planned |
 
@@ -47,6 +47,9 @@ chama-loan-default/
   HMAC-SHA256 and a secret key. Everything after the anonymisation step,
   including models and the dashboard, sees only codes.
 - The name-to-code link lives in the restricted `private` database schema.
+- Only the modelling table (`analytics.loan_features`: codes and features, no
+  names, no free text) leaves this computer, to Google Drive for Colab
+  (decision D-016). The export stops if a name or an unlisted column appears.
 - Data is used with the written permission of each Chama's officials.
 
 ## Setup (Windows, PowerShell)
@@ -56,8 +59,8 @@ chama-loan-default/
 conda create -n chama python=3.11 -y
 conda activate chama
 
-# 2. Install the project and dev tools
-pip install -e ".[dev]"
+# 2. Install the project, dev tools and modelling libraries
+pip install -e ".[dev,ml]"
 
 # 3. Create your .env from the example and fill it in
 Copy-Item .env.example .env
@@ -107,7 +110,50 @@ python -m chama.pipeline all
 | 1 | Copies the raw Excel files into the `raw` schema, exactly as written | `ingest` |
 | 2 | Checks every name spelling has a reviewed alias; restores reviewed names into an empty database | `suggest-aliases`, `load-aliases` |
 | 3 | Copies raw to `staging` with member codes instead of names | `anonymise` |
-| 4 | Builds the clean tables and loans with dbt, runs the data checks, prints the quality report (saved to `data/processed/quality_report.csv`) | `clean` |
+| 4 | Builds the clean tables, loans and the modelling table (`loan_features`) with dbt, runs the data checks, prints the quality report (saved to `data/processed/quality_report.csv`) | `clean` |
+
+**For modelling** (not part of `all`, because it sends data to Google Drive):
+`python -m chama.pipeline export` writes `loan_features.parquet` and a
+manifest to the `data/` folder of `DRIVE_DIR` from `.env` (the project folder
+on Google Drive), or to `data/processed` when it is not set.
+
+## Training the models (Milestone 2)
+
+The supervisor's workflow: code here, push to GitHub, train in Google Colab,
+keep data and results on Google Drive, review the synced results here
+(decisions D-016 to D-020).
+
+**Once, on this computer.** Install Google Drive for desktop, create
+`My Drive/chama-loan-default` and make it available offline, then set
+`DRIVE_DIR=G:/My Drive/chama-loan-default` in `.env`.
+
+**Once, in Colab.** Add a GitHub token that can read this repository as the
+Colab secret `GITHUB_TOKEN` (key icon on the left). The first cell of each
+notebook mounts Drive, fetches the code and installs what Colab lacks.
+
+**Each round.**
+
+```powershell
+python -m chama.pipeline all       # rebuild the database and loan_features
+python -m chama.pipeline export    # codes-only table -> Drive/data
+```
+
+Then in Colab (File → Open notebook → GitHub, branch `m2-features-models`):
+
+| Notebook | What it does |
+| --- | --- |
+| `01_explore_features` | label balance by year and type, missing values, features by outcome |
+| `02_train_and_compare` | 3 models × 4 imbalance strategies, walk-forward and members-held-out tests, MLflow logging (about 8 minutes) |
+| `03_explain_risk` | SHAP for the best run, scores, risk bands and top factors for open loans |
+
+The same notebooks run here in the `chama` environment, and
+`python -m chama.pipeline train` runs the training without a notebook. To
+compare the runs in the browser:
+
+```powershell
+$env:MLFLOW_ALLOW_FILE_STORE = "true"
+mlflow ui --backend-store-uri "file:///G:/My Drive/chama-loan-default/mlruns"
+```
 
 **When new names appear** (for example after adding a new year), step 2 writes
 `data/interim/aliases_<chama>.csv` and stops, because matching names needs a
