@@ -13,7 +13,7 @@ from chama.config import PROJECT_ROOT
 
 DBT_DIR = PROJECT_ROOT / "transform"
 # Settings in config/pipeline.yaml that the dbt models use.
-DBT_VARS = ["loan_term_days", "emergency_term_days"]
+DBT_VARS = ["loan_term_days", "emergency_term_days", "default_statuses", "history_months"]
 
 
 def run_dbt(args: list[str], config: dict | None = None) -> None:
