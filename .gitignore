@@ -40,3 +40,6 @@ Thumbs.db
 transform/target/
 transform/logs/
 transform/dbt_packages/
+
+# Modelling exports (data, even though codes only)
+*.parquet
