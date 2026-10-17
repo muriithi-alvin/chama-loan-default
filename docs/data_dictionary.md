@@ -176,6 +176,7 @@ Full column descriptions: `python -m chama.pipeline dbt docs generate`.
 | `attendance` | member per meeting | `status` (`present`, `absent`, `apology`, `late`) |
 | `loan_lines` | statement line | `loan_id`, `line_seq`, `link` (`start`, `continued`, `continued_with_top_up`, `repayment_unlinked`, `not_a_loan`), `carry_difference`, `top_up_amount` |
 | `loans` | loan | `loan_type`, `issued_month` + `issue_source`, `due_month` + `due_source`, `cleared_month`, `outstanding_at_due`, `months_late`, `status` |
+| `loan_features` | loan with a known issue month | the modelling table (M2): the member's record before the loan was given, `defaulted` (provisional label) and `in_training`; see below |
 | `quality_report` | measure per Chama and year | counts of rows, flagged rows, missing values, estimated dates, links, statuses |
 
 **How values are read.** Amounts: commas, spaces, `/=` and `Ksh` are dropped,
@@ -189,3 +190,23 @@ to 20, is a rate; a larger number is an amount.
 `repaid` (no due month known), `overdue` (not cleared, due month passed),
 `open` (not yet due when the records end), `open_no_due_date`, `lost_track`
 (stops appearing while the records go on: check member names and the photos).
+
+## `loan_features` — the modelling table (Milestone 2)
+
+One row per loan with a known issue month (loans already running on the first
+page are left out). Every feature uses only meetings **before** the issue
+month and earlier loans as they stood then (decision D-018). "Recent" means
+the `history_months` (12) before the issue month. Column descriptions are in
+`transform/models/features/features.yml`.
+
+| Group | Columns |
+| --- | --- |
+| Keys and time | `loan_id`, `chama_id`, `member_code`, `issued_month`, `issue_year`, `issue_source` |
+| The request | `loan_type`, `amount`, `is_rollover`, `amount_vs_own_max`, `amount_vs_chama_median` |
+| Member's record | `months_in_records`, `prior_loans`, `prior_repaid`, `prior_repaid_late`, `prior_rolled_over`, `recent_emergency_loans`, `recent_school_fees_loans` |
+| Position at issue | `open_loans_at_issue`, `outstanding_at_issue`, `oldest_open_loan_months` |
+| Recent behaviour | `recent_balance_lines`, `recent_missed_share`, `recent_repayment_ratio`, `recent_contribution_rate` (contributions are written from 2017) |
+| Outcome | `status`, `defaulted` (1 if `status` is in `default_statuses`, provisionally `topped_up`, `overdue`, `lost_track`; empty while unknown), `in_training`, `outcome_month` (when the outcome became known; used so a test year learns only from outcomes known before it, D-020) |
+
+`python -m chama.pipeline export` writes this table, and nothing else, as
+`loan_features.parquet` for Colab (decision D-016).
