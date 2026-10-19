@@ -30,9 +30,11 @@ modelling:
   experiment: chama-loan-default   # MLflow experiment name
   # Walk forward: each test year is scored by a model trained only on loans
   # given, and with an outcome known, before that year. Loans given after 2024
-  # have had too little time to show a default, so they are not tested.
-  test_years: [2019, 2020, 2021, 2022, 2023, 2024]
-  min_training_defaults: 8   # skip a test year with fewer known defaults before it
+  # have had too little time to show a default, so they are not tested. 2018
+  # and 2019 train on only 5-6 known defaults, but without them the test would
+  # rest on 12 defaults instead of 22.
+  test_years: [2018, 2019, 2020, 2021, 2022, 2023, 2024]
+  min_training_defaults: 5   # skip a test year with fewer known defaults before it
   member_folds: 5            # second check: each member's loans held out together
   models: [logistic_regression, random_forest, xgboost]
   # Ways to handle the imbalance (about 1 default in 6 loans), compared on the
