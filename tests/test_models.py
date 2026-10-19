@@ -66,6 +66,22 @@ def test_every_model_and_strategy_gives_scores_between_0_and_1(model, imbalance)
     assert np.all((scores >= 0) & (scores <= 1))
 
 
+@pytest.mark.parametrize("imbalance", ["class_weight", "kmeans_smote", "cluster_centroids"])
+def test_prior_correction_keeps_the_order_and_restores_the_real_share(imbalance):
+    df = made_up_loans()
+    X, y = xy(df[df["in_training"]])
+    y = y.astype(int)
+    fitted = make_model("logistic_regression", imbalance, y, random_state=0).fit(X, y)
+    corrected = fitted.predict_proba(X)[:, 1]
+    balanced = super(type(fitted), fitted).predict_proba(X)[:, 1]
+    # same order: sorting by the balanced score sorts the corrected one too
+    assert np.all(np.diff(corrected[np.argsort(balanced)]) >= -1e-12)
+    # trained as if half defaulted, the balanced scores sit far above the real share;
+    # corrected, they come back close to it
+    assert abs(corrected.mean() - y.mean()) < abs(balanced.mean() - y.mean())
+    assert abs(corrected.mean() - y.mean()) < 0.1
+
+
 def test_resampling_changes_training_loans_only():
     df = made_up_loans()
     X, y = xy(df[df["in_training"]])
