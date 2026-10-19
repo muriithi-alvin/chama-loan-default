@@ -290,10 +290,12 @@ roughly one default in six. Random train/test splits would let a model learn
 from later loans of the same members and from outcomes nobody knew yet, and
 would overstate how well it works.
 **Decision.**
-- **Main test: walk forward.** For each year 2019–2024, train only on loans
+- **Main test: walk forward.** For each year 2018–2024, train only on loans
   given and resolved (`outcome_month`) before that year, then score that
   year's loans; the years are pooled for the metrics. Loans given after 2024
-  have had too little time to show a default and are not tested.
+  have had too little time to show a default and are not tested. A year needs
+  at least 5 known defaults before it: 2018 and 2019 train on 5–6, but
+  without them the test rests on 12 defaults instead of 22.
 - **Second check: members held out** (grouped folds), for how the model would
   do on a member it has not seen.
 - **Metrics:** precision-recall AUC (chance level is the share of defaults),
@@ -304,6 +306,11 @@ would overstate how well it works.
   no correction, class weights, k-means SMOTE (synthetic defaults inside
   k-means clusters) and k-means cluster centroids (repaid loans reduced to one
   real loan per cluster). Resampling runs inside the training folds only.
+  These strategies train as if half the loans defaulted, so their scores are
+  moved back to the real share of defaults (prior correction: odds multiplied
+  by share / (1 − share); Saerens et al. 2002, Dal Pozzolo et al. 2015). The
+  order of the scores, and so PR AUC and ROC AUC, is unchanged; the Brier
+  score and the risk bands become comparable with `none`.
 - **Choice:** the best walk-forward PR AUC, unless its Brier score shows the
   scores cannot be read as risks; differences within the intervals are not
   treated as wins.
@@ -313,8 +320,19 @@ that random over- and undersampling and SMOTE did not improve the ranking of
 logistic regression models and made their probabilities overestimate risk,
 which officials here would read as a member's risk. Testing the strategies on
 this data, rather than assuming they help or hurt, gives evidence either way.
-**Consequences.** The first run (labels still including the split-member
-artefacts) showed no strategy clearly ahead: k-means SMOTE was close to no
-correction for the random forest and slightly ahead for XGBoost, always with
-a worse Brier score; cluster centroids fell to chance. To repeat once the
-name review is fixed.
+**Results, 2026-10-19** (clean names; 263 loans, 247 with a known outcome,
+28 provisional defaults):
+- Walk forward (133 test loans, 22 defaults, chance PR AUC 0.165): ROC AUC
+  0.50–0.55 for every model and strategy, so no model ranks future loans
+  reliably. XGBoost with k-means cluster centroids had the best PR AUC (0.355,
+  interval 0.19–0.54), stable across seeds, from ranking a few defaults first.
+- Members held out (247 loans, 28 defaults, chance 0.113): the tree models
+  reach ROC AUC 0.62–0.68 (lower interval bounds 0.50–0.58); logistic
+  regression 0.54–0.60. Brier scores match giving every loan the average risk.
+- No imbalance strategy wins on both tests. Before the prior correction,
+  weighting and resampling pushed every loan into the high band.
+- SHAP: loan amount, amount against the member's largest earlier loan, number
+  of earlier loans and loan type weigh most. Raw amounts grew about six-fold
+  over the records; dropping them cost nothing in a separate comparison.
+The first run, before the name review was fixed, is not comparable (labels
+included 11 split-member artefacts).
