@@ -14,8 +14,13 @@ Imbalance strategies (decision D-020), compared on the same tests:
                      defaults inside the groups where defaults occur
   cluster_centroids  shrink the repaid loans to one real loan per k-means group
                      until the classes are equal
-Weighting and resampling raise the scores of every loan, so their scores read
-less directly as probabilities; the Brier score and calibration plot show this.
+
+Prior correction. Weighting and resampling train the model as if half of all
+loans defaulted, which raises every score. Their pipelines therefore move each
+score back to the real share of defaults in the training loans (Saerens et al.
+2002; Dal Pozzolo et al. 2015): the odds are multiplied by
+share / (1 - share). Scores keep their order, so ranking metrics are
+unchanged, but they read as risks again and the risk bands work.
 """
 from __future__ import annotations
 
@@ -112,6 +117,27 @@ def resampler(imbalance: str, y_train: pd.Series, random_state: int):
     raise ValueError(f"Unknown imbalance strategy {imbalance!r}; choose from {', '.join(IMBALANCE)}")
 
 
+class PriorCorrectedPipeline(Pipeline):
+    """A pipeline trained on balanced classes whose scores are moved back to the
+    real share of defaults (see the module notes). Same steps and parameters as
+    Pipeline; fitting also records the training share of defaults."""
+
+    def fit(self, X, y=None, **params):
+        super().fit(X, y, **params)
+        self.default_share_ = float(np.mean(y))
+        return self
+
+    def predict_proba(self, X, **params):
+        balanced = np.clip(super().predict_proba(X, **params)[:, 1], 1e-9, 1 - 1e-9)
+        share = self.default_share_
+        odds = balanced / (1 - balanced) * share / (1 - share)
+        corrected = odds / (1 + odds)
+        return np.column_stack([1 - corrected, corrected])
+
+    def predict(self, X, **params):
+        return (self.predict_proba(X, **params)[:, 1] >= 0.5).astype(int)
+
+
 def make_model(name: str, imbalance: str, y_train: pd.Series, random_state: int = 42) -> Pipeline:
     """An unfitted pipeline for one model and one imbalance strategy."""
     steps = [("prep", preparation())]
@@ -119,4 +145,5 @@ def make_model(name: str, imbalance: str, y_train: pd.Series, random_state: int 
     if sampler is not None:
         steps.append(("resample", sampler))
     steps.append(("model", classifier(name, imbalance == "class_weight", y_train, random_state)))
-    return Pipeline(steps)
+    # every strategy except "none" trains as if half the loans defaulted
+    return Pipeline(steps) if imbalance == "none" else PriorCorrectedPipeline(steps)
