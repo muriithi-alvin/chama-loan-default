@@ -43,6 +43,19 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 - `DRIVE_DIR` in `.env` (replaces `EXPORT_DIR`): the project folder on Google
   Drive, holding `data/` and `mlruns/`.
 
+### Changed — testing after the name review was fixed
+- The name review again links the six split member codes (12 members): 263
+  loans, 7 lost track, 28 provisional defaults, matching the M1 report.
+- Prior correction (`PriorCorrectedPipeline`): models trained with class
+  weights or k-means resampling have their scores moved back to the real
+  share of defaults, so the Brier score and risk bands are comparable. Test
+  in `tests/test_models.py`.
+- Walk-forward test years 2018–2024 with at least 5 known defaults before
+  each (was 2019–2024, 8): 22 test defaults instead of 12.
+- First results recorded in D-020: no model ranks future loans reliably
+  (walk-forward ROC AUC 0.50–0.55); tree models reach 0.62–0.68 with members
+  held out; no imbalance strategy wins on both tests.
+
 ### Changed
 - The GitHub repository is private (D-017).
 - D-016: the officials confirmed that their permission covers keeping the
