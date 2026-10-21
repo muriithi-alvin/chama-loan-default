@@ -26,6 +26,7 @@ rejected. Newest last. Change a decision by adding a new one that replaces it.
 | D-019 | 2026-10-16 | MLflow experiment tracking starts in Milestone 2 |
 | D-020 | 2026-10-16 | Walk-forward testing; imbalance strategies compared, not assumed |
 | D-021 | 2026-10-20 | A second target: an early warning of missed repayments |
+| D-022 | 2026-10-21 | Risk bands set by share of out-of-time scores |
 
 ---
 
@@ -381,3 +382,36 @@ stated):
   gave the random forest small gains in PR AUC within the intervals; k-means
   cluster centroids lowered it. No strategy wins on both tests for either
   target.
+
+## D-022 Risk bands set by share of out-of-time scores
+**Context.** The bands were fixed score cut-offs (0.15 and 0.30 for loan
+default, 0.20 and 0.40 for missed repayments). The best early-warning model
+ranks members well but its scores are compressed: 95% of its walk-forward
+scores lie below 0.27, so the high band held 3 of 938 test rows. Its Brier
+score equals giving everyone the average risk, so the scores are not reliable
+probabilities and should not be shown to officials as such.
+**Decision.** Bands are set by share, per target (`band_shares` in
+`config/pipeline.yaml`): the top 20% of scores are high, the next 30% medium,
+the bottom 50% low. Each training run turns the shares into score cut-offs
+from its own walk-forward scores, logs them to MLflow
+(`band_cutoff_medium`, `band_cutoff_high`) with a band table giving each
+band's event rate and a bootstrap 95% interval, and the rows still open are
+scored with the chosen run's cut-offs. Officials see the band and what it
+meant in testing, not the raw score.
+**Why.** Bands by share use what the models do well, which is ranking; the
+cut-offs are tested out of time, so the band rates are honest; and a fixed
+share fixes the follow-up workload (about one member in five in the high
+band).
+**Results** (random forest with class weights, early-warning target, 938
+walk-forward rows): in testing a repayment was missed within 3 meetings by
+12% of low-band rows (interval 9–15%), 25% of medium (20–30%) and 33% of high
+(26–40%): the high band had the event almost three times as often as the low
+band, and the event rate rose across every fifth of the scores (8, 14, 22, 24
+and 33%). For loan default no run's bands separate defaults (by fifth of the
+scores, for example 19, 19, 7, 12 and 26%); its bands are computed the same
+way but should not be presented as meaningful until the label is agreed and
+there are more defaults.
+**Consequences.** The shares are provisional, to agree with the Chama (for
+example, how many members the officials can follow up each month). The
+cut-offs change with every training batch, so the M4 dashboard must read them
+from the chosen run, not from the config.
