@@ -6,6 +6,7 @@ import pytest
 from chama.models.data import LOAN_DEFAULT, MISSED_REPAYMENT, TARGETS, add_derived, xy
 from chama.models.estimators import IMBALANCE, MODELS, make_model
 from chama.models.evaluate import (
+    band_cutoffs,
     band_table,
     forward_splits,
     member_folds,
@@ -120,14 +121,23 @@ def test_metrics_for_a_perfect_ranking():
     assert m["event_share"] == pytest.approx(0.4)
 
 
+def test_band_cutoffs_split_the_rows_by_share():
+    scores = np.arange(100) / 100
+    cutoffs = band_cutoffs(scores, {"high": 0.20, "medium": 0.30})
+    bands = risk_band(scores, cutoffs)
+    assert [(bands == b).sum() for b in ["low", "medium", "high"]] == [50, 30, 20]
+
+
 def test_risk_bands_and_their_table():
-    bands = {"medium": 0.15, "high": 0.30}
-    assert list(risk_band([0.05, 0.15, 0.29, 0.30, 0.9], bands)) == [
+    cutoffs = {"medium": 0.15, "high": 0.30}
+    assert list(risk_band([0.05, 0.15, 0.29, 0.30, 0.9], cutoffs)) == [
         "low", "medium", "medium", "high", "high"]
     pred = pd.DataFrame({"actual": [0, 0, 1, 1], "score": [0.05, 0.2, 0.2, 0.5]})
-    table = band_table(pred, bands).set_index("band")
+    table = band_table(pred, cutoffs, n_boot=50).set_index("band")
     assert table.loc["medium", "rows"] == 2
     assert table.loc["high", "share_of_events"] == 0.5
+    medium = table.loc["medium"]
+    assert medium["rate_low"] <= medium["event_rate"] <= medium["rate_high"]
 
 
 @pytest.mark.parametrize("model", MODELS)
