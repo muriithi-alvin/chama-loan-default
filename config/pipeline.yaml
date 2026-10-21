@@ -40,6 +40,11 @@ modelling:
   imbalance: [none, class_weight, kmeans_smote, cluster_centroids]
   bootstrap_samples: 1000    # for confidence intervals of the test metrics
   random_state: 42
+  # Risk bands (D-022) are set by share, not by fixed scores: each run puts the
+  # top `high` share of its walk-forward scores in the high band and the next
+  # `medium` share in the medium band, logs the score cut-offs to MLflow, and
+  # reports how often each band had the event in testing. The scores rank well
+  # but are compressed, so fixed probability cut-offs left the high band empty.
   # Walk forward: each test year is scored by a model trained only on rows from
   # before that year whose outcome was known before it.
   targets:
@@ -50,10 +55,12 @@ modelling:
       # test would rest on 12 defaults instead of 22.
       test_years: [2018, 2019, 2020, 2021, 2022, 2023, 2024]
       min_training_events: 5   # skip a test year with fewer known events before it
-      risk_bands: {medium: 0.15, high: 0.30}   # provisional, to agree with the Chama
+      # Computed the same way, but no run's bands separate defaults yet (D-022).
+      band_shares: {high: 0.20, medium: 0.30}
     missed_repayment:        # will a repayment be missed in the next meetings? (member_months)
       experiment: chama-missed-repayment
       # 2014-2015 give the first training years; 2026 has too few known rows.
       test_years: [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
       min_training_events: 20
-      risk_bands: {medium: 0.20, high: 0.40}   # provisional; about 1 row in 5 is an event
+      # Top 20% high, next 30% medium, bottom 50% low; to agree with the Chama.
+      band_shares: {high: 0.20, medium: 0.30}
