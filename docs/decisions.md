@@ -25,6 +25,7 @@ rejected. Newest last. Change a decision by adding a new one that replaces it.
 | D-018 | 2026-10-16 | Point-in-time features and a provisional default label, built in dbt |
 | D-019 | 2026-10-16 | MLflow experiment tracking starts in Milestone 2 |
 | D-020 | 2026-10-16 | Walk-forward testing; imbalance strategies compared, not assumed |
+| D-021 | 2026-10-20 | A second target: an early warning of missed repayments |
 
 ---
 
@@ -336,3 +337,47 @@ this data, rather than assuming they help or hurt, gives evidence either way.
   over the records; dropping them cost nothing in a separate comparison.
 The first run, before the name review was fixed, is not comparable (labels
 included 11 split-member artefacts).
+**Update 2026-10-20.** Money is used only as ratios: `amount` and
+`outstanding_at_issue` are replaced by `outstanding_vs_amount` (debt owed
+relative to the new loan), beside `amount_vs_own_max` and
+`amount_vs_chama_median`. Loan sizes grew about six-fold over the records, so
+raw amounts compare loans of different years unfairly; the walk-forward test
+showed no loss of ranking and a slightly better Brier score without them.
+
+## D-021 A second target: early warning of missed repayments
+**Context.** The loan-default target has 28 provisional defaults among 247
+loans with a known outcome, and no model ranks future loans reliably (D-020).
+A few dozen events cannot support a trustworthy model, whatever the method.
+**Decision.** Add a second target beside loan default, built from the same
+ledger: `analytics.member_months` has one row per member per meeting while the
+member owes on a loan, with features known after that meeting and the label
+`missed_ahead`: a running loan gets no repayment in the next
+`warning_horizon_meetings` (3) meetings. 1,187 rows have a known label, 222 of
+them events (about 1 in 5). Both targets share the same tests (walk forward,
+members held out), imbalance strategies, prior correction, SHAP and MLflow,
+each in its own MLflow experiment (`chama-loan-default`,
+`chama-missed-repayment`).
+**Why.** Officials gain an early warning between loan requests (who is likely
+to fall behind soon), and the model has eight times as many events to learn
+from. Missed repayments are written in the ledger as they happen, so the label
+needs no agreement on loan terms.
+**Consequences.** Meetings are counted in order (`meeting_seq`), not by page
+number, because page numbers skip where a photo was retaken. A missed
+repayment is a written line with no repayment; meetings a member did not
+appear at are not counted. The loan-default target stays the main one for
+loan requests; the report presents both.
+**Results, 2026-10-20** (one training batch, both targets; walk forward unless
+stated):
+- `missed_repayment` (10 test years, 1,187 rows, chance PR AUC 0.20): the
+  random forest ranks future misses above chance. Best PR AUC 0.31 (interval
+  0.26–0.37) with class weights, 0.29 with k-means SMOTE, 0.26 without a
+  correction; ROC AUC 0.64–0.65. Members held out: ROC AUC 0.55–0.68, best
+  logistic regression. Brier scores equal giving every row the average risk,
+  so the scores rank members but are not yet reliable probabilities.
+- `loan_default` with money as ratios (7 test years, chance 0.165): ROC AUC
+  0.48–0.55; best PR AUC 0.27 (interval 0.14–0.46), XGBoost with k-means
+  cluster centroids. No reliable ranking of future loans.
+- Imbalance: on the early-warning target, class weights and k-means SMOTE
+  gave the random forest small gains in PR AUC within the intervals; k-means
+  cluster centroids lowered it. No strategy wins on both tests for either
+  target.
