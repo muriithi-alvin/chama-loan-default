@@ -37,14 +37,14 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
 from xgboost import XGBClassifier
 
-from chama.models.data import CATEGORICAL_FEATURES, LOG_FEATURES, NUMERIC_FEATURES
+from chama.models.data import Target
 
 MODELS = ["logistic_regression", "random_forest", "xgboost"]
 IMBALANCE = ["none", "class_weight", "kmeans_smote", "cluster_centroids"]
 
 
-def preparation() -> ColumnTransformer:
-    """Fill gaps, log-scale amounts, standardise, and one-hot the loan type.
+def preparation(target: Target) -> ColumnTransformer:
+    """Fill gaps, log-scale skewed values, standardise, one-hot categories.
 
     Missing values get the training median plus a 0/1 column saying the value
     was missing (for example "no earlier loan of this type"). Scaling does not
@@ -59,14 +59,14 @@ def preparation() -> ColumnTransformer:
         ("fill", SimpleImputer(strategy="median", add_indicator=True)),
         ("scale", StandardScaler()),
     ])
+    parts = [
+        ("log", log_scaled, list(target.log_features)),
+        ("num", numeric, list(target.numeric_features)),
+        ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False),
+         list(target.categorical_features)),
+    ]
     return ColumnTransformer(
-        [
-            ("log", log_scaled, LOG_FEATURES),
-            ("num", numeric, NUMERIC_FEATURES),
-            ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False),
-             CATEGORICAL_FEATURES),
-        ],
-        verbose_feature_names_out=False,
+        [part for part in parts if part[2]], verbose_feature_names_out=False
     )
 
 
@@ -109,7 +109,7 @@ def resampler(imbalance: str, y_train: pd.Series, random_state: int):
     if imbalance == "cluster_centroids":
         # "hard" voting keeps real loans (the nearest to each centroid)
         return ClusterCentroids(
-            estimator=KMeans(n_init=10, random_state=random_state),
+            estimator=KMeans(n_init=3, random_state=random_state),
             voting="hard", random_state=random_state,
         )
     if imbalance in ("none", "class_weight"):
@@ -138,9 +138,10 @@ class PriorCorrectedPipeline(Pipeline):
         return (self.predict_proba(X, **params)[:, 1] >= 0.5).astype(int)
 
 
-def make_model(name: str, imbalance: str, y_train: pd.Series, random_state: int = 42) -> Pipeline:
-    """An unfitted pipeline for one model and one imbalance strategy."""
-    steps = [("prep", preparation())]
+def make_model(target: Target, name: str, imbalance: str, y_train: pd.Series,
+               random_state: int = 42) -> Pipeline:
+    """An unfitted pipeline for one target, model and imbalance strategy."""
+    steps = [("prep", preparation(target))]
     sampler = resampler(imbalance, y_train, random_state)
     if sampler is not None:
         steps.append(("resample", sampler))
