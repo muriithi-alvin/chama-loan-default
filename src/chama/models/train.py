@@ -7,7 +7,7 @@ per model and strategy (decisions D-019, D-020), holding:
            and the training batch: every run of one `train` call shares it, so
            notebooks can pick the best run of the latest batch
   metrics  forward_* (walk forward, the main test), members_* (members held
-           out), and how the risk bands sorted the test rows
+           out), the band cut-offs and how the bands sorted the test rows
   files    test scores, the risk band table, precision-recall and calibration
            plots, SHAP importance, and the final model, trained on every row
            with a known outcome
@@ -39,8 +39,9 @@ SUMMARY_COLUMNS = {
     "forward_brier": "Brier",
     "members_pr_auc": "PR AUC (members held out)",
     "members_roc_auc": "ROC AUC (members held out)",
+    "high_band_event_rate": "high band rate",
+    "low_band_event_rate": "low band rate",
     "high_band_share_of_events": "events in high band",
-    "high_band_event_rate": "high band event rate",
 }
 
 
@@ -95,6 +96,7 @@ def train_one(df: pd.DataFrame, target, model: str, imbalance: str, settings: di
     from chama.models.data import known_outcomes, xy
     from chama.models.estimators import make_model
     from chama.models.evaluate import (
+        band_cutoffs,
         band_metrics,
         band_table,
         member_folds,
@@ -111,7 +113,9 @@ def train_one(df: pd.DataFrame, target, model: str, imbalance: str, settings: di
         members = member_folds(df, target, model, imbalance, settings)
         forward_metrics = metrics(forward, settings["bootstrap_samples"], seed)
         member_metrics = metrics(members, settings["bootstrap_samples"], seed)
-        bands = band_table(forward, settings["risk_bands"])
+        # cut-offs from the walk-forward scores: tested out of time (D-022)
+        cutoffs = band_cutoffs(forward["score"], settings["band_shares"])
+        bands = band_table(forward, cutoffs, settings["bootstrap_samples"], seed)
         mlflow.log_params({
             "target": target.name,
             "model": model,
@@ -119,7 +123,7 @@ def train_one(df: pd.DataFrame, target, model: str, imbalance: str, settings: di
             "test_years": sorted(forward["test_year"].unique().tolist()),
             "min_training_events": settings["min_training_events"],
             "member_folds": settings["member_folds"],
-            "risk_bands": settings["risk_bands"],
+            "band_shares": settings["band_shares"],
             "random_state": seed,
             "features": len(target.features),
         })
@@ -127,6 +131,7 @@ def train_one(df: pd.DataFrame, target, model: str, imbalance: str, settings: di
             {f"forward_{k}": v for k, v in forward_metrics.items()}
             | {f"members_{k}": v for k, v in member_metrics.items()}
             | band_metrics(bands)
+            | {f"band_cutoff_{name}": value for name, value in cutoffs.items()}
         )
 
         X, y = xy(known_outcomes(df), target)
@@ -160,6 +165,7 @@ def train_one(df: pd.DataFrame, target, model: str, imbalance: str, settings: di
     summary |= {f"forward_{k}": v for k, v in forward_metrics.items()}
     summary |= {f"members_{k}": v for k, v in member_metrics.items()}
     summary |= band_metrics(bands)
+    summary |= {f"band_cutoff_{name}": value for name, value in cutoffs.items()}
     return summary, forward
 
 
