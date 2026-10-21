@@ -8,7 +8,8 @@ Usage:
     python -m chama.pipeline anonymise         # 3. raw -> staging, names -> codes
     python -m chama.pipeline clean             # 4. staging -> analytics with dbt, checks, report
     python -m chama.pipeline dbt <args>        #    any dbt command, e.g. "dbt test"
-    python -m chama.pipeline export            # 5. modelling table (codes only) -> Google Drive
+    python -m chama.pipeline export            # 5. modelling tables (codes only) -> Google Drive
+    python -m chama.pipeline train             # 6. train, test and log the models (MLflow)
 
 Add --help after any step for details.
 """
@@ -171,13 +172,14 @@ def dbt_command(args: tuple[str, ...]) -> None:
     help="Folder to write to (default: <DRIVE_DIR>/data, else data/processed).",
 )
 def export(out_dir: Path | None) -> None:
-    """Write the modelling table for Colab: loan_features.parquet and a manifest.
+    """Write the modelling tables for Colab, each as Parquet with a manifest.
 
-    Only analytics.loan_features is written: member codes and features, no
-    names, no free text (decision D-016). Stops if the table has a column not
-    cleared for export or a value containing a member's name. Set DRIVE_DIR
-    in .env to the project folder on Google Drive; the table goes to its
-    data/ folder, which the Colab notebooks read.
+    Only analytics.loan_features and analytics.member_months are written:
+    member codes and features, no names, no free text (decision D-016). Stops,
+    writing nothing, if a table has a column not cleared for export or a value
+    containing a member's name. Set DRIVE_DIR in .env to the project folder on
+    Google Drive; the tables go to its data/ folder, which the Colab notebooks
+    read.
     """
     from chama.features.export import run
 
@@ -186,8 +188,13 @@ def export(out_dir: Path | None) -> None:
 
 @cli.command()
 @click.option(
-    "--data", type=click.Path(dir_okay=False, path_type=Path),
-    help="The exported table (default: <DRIVE_DIR>/data/loan_features.parquet).",
+    "--target", "targets", multiple=True,
+    type=click.Choice(["loan_default", "missed_repayment"]),
+    help="Train only this target (repeat for both). Default: every target in config.",
+)
+@click.option(
+    "--data-dir", type=click.Path(file_okay=False, path_type=Path),
+    help="Folder with the exported tables (default: <DRIVE_DIR>/data, else data/processed).",
 )
 @click.option(
     "--model", "models", multiple=True,
@@ -199,20 +206,23 @@ def export(out_dir: Path | None) -> None:
     type=click.Choice(["none", "class_weight", "kmeans_smote", "cluster_centroids"]),
     help="Only this imbalance strategy (repeat for more). Default: all in config.",
 )
-def train(data: Path | None, models: tuple[str, ...], imbalance: tuple[str, ...]) -> None:
-    """Train and test the models on the exported table; log each run to MLflow.
+def train(targets: tuple[str, ...], data_dir: Path | None, models: tuple[str, ...],
+          imbalance: tuple[str, ...]) -> None:
+    """Train and test the models on the exported tables; log each run to MLflow.
 
-    Every model is tested walking forward in time (trained on earlier loans,
-    scored on the next year) and with members held out, once per imbalance
-    strategy. Runs go to <DRIVE_DIR>/mlruns (else ./mlruns); view them with
-    the mlflow ui command printed at the end. Does not need the database.
+    Two targets: loan_default (will this loan default?) and missed_repayment
+    (will a repayment be missed in the next meetings?). Every model is tested
+    walking forward in time and with members held out, once per imbalance
+    strategy. Runs go to <DRIVE_DIR>/mlruns (else ./mlruns), one MLflow
+    experiment per target; view them with the mlflow ui command printed at the
+    end. Does not need the database.
     """
     from chama.config import mlflow_dir
     from chama.models.train import run, summary_table
 
     def go() -> None:
-        summary, _ = run(data_path=data, models=list(models) or None,
-                         imbalance=list(imbalance) or None)
+        summary, _ = run(targets=list(targets) or None, data_dir=data_dir,
+                         models=list(models) or None, imbalance=list(imbalance) or None)
         print()
         print(summary_table(summary).to_string(index=False))
         print("\nCompare runs in the browser (PowerShell):")
