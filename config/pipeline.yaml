@@ -24,25 +24,36 @@ emergency_term_days: 31
 default_statuses: [topped_up, overdue, lost_track]
 # "Recent" behaviour features look back this many months before a loan is given.
 history_months: 12
+# Early-warning target (analytics.member_months, D-021): did the member miss a
+# repayment within this many meetings after the current one?
+warning_horizon_meetings: 3
 
-# Milestone 2 - training and evaluation (src/chama/models, decision D-020).
+# Milestone 2 - training and evaluation (src/chama/models, decisions D-020, D-021).
 modelling:
-  experiment: chama-loan-default   # MLflow experiment name
-  # Walk forward: each test year is scored by a model trained only on loans
-  # given, and with an outcome known, before that year. Loans given after 2024
-  # have had too little time to show a default, so they are not tested. 2018
-  # and 2019 train on only 5-6 known defaults, but without them the test would
-  # rest on 12 defaults instead of 22.
-  test_years: [2018, 2019, 2020, 2021, 2022, 2023, 2024]
-  min_training_defaults: 5   # skip a test year with fewer known defaults before it
-  member_folds: 5            # second check: each member's loans held out together
+  member_folds: 5            # second check: each member's rows held out together
   models: [logistic_regression, random_forest, xgboost]
-  # Ways to handle the imbalance (about 1 default in 6 loans), compared on the
-  # same tests: none, class weights, k-means SMOTE (adds synthetic defaults
-  # inside k-means clusters), k-means cluster centroids (keeps one repaid loan
-  # per cluster). Resampling is applied to training folds only.
+  # Ways to handle the imbalance, compared on the same tests: none, class
+  # weights, k-means SMOTE (adds synthetic events inside k-means clusters),
+  # k-means cluster centroids (keeps one real non-event row per cluster).
+  # Resampling is applied to training folds only, then scores are moved back
+  # to the real share of events (prior correction).
   imbalance: [none, class_weight, kmeans_smote, cluster_centroids]
-  # Risk category from the model's score (provisional, to agree with the Chama)
-  risk_bands: {medium: 0.15, high: 0.30}
   bootstrap_samples: 1000    # for confidence intervals of the test metrics
   random_state: 42
+  # Walk forward: each test year is scored by a model trained only on rows from
+  # before that year whose outcome was known before it.
+  targets:
+    loan_default:            # will this loan default? (loan_features)
+      experiment: chama-loan-default   # MLflow experiment
+      # Loans given after 2024 have had too little time to show a default.
+      # 2018 and 2019 train on only 5-6 known defaults, but without them the
+      # test would rest on 12 defaults instead of 22.
+      test_years: [2018, 2019, 2020, 2021, 2022, 2023, 2024]
+      min_training_events: 5   # skip a test year with fewer known events before it
+      risk_bands: {medium: 0.15, high: 0.30}   # provisional, to agree with the Chama
+    missed_repayment:        # will a repayment be missed in the next meetings? (member_months)
+      experiment: chama-missed-repayment
+      # 2014-2015 give the first training years; 2026 has too few known rows.
+      test_years: [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+      min_training_events: 20
+      risk_bands: {medium: 0.20, high: 0.40}   # provisional; about 1 row in 5 is an event
