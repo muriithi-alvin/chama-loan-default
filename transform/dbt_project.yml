@@ -24,6 +24,7 @@ vars:
   # The modelling table (loan_features):
   default_statuses: [topped_up, overdue, lost_track]   # provisional default label (D-018)
   history_months: 12           # look-back for "recent" behaviour features
+  warning_horizon_meetings: 3  # early-warning label looks this many meetings ahead (D-021)
 
 models:
   chama:
