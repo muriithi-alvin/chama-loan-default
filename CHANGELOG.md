@@ -6,6 +6,32 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
 ## [Unreleased] — branch `m2-features-models`
 
+### Added — a second target: early warning of missed repayments (D-021)
+- `analytics.member_months` (dbt): one row per member per meeting while a loan
+  runs, with features known after the meeting and `missed_ahead` (a repayment
+  missed in the next `warning_horizon_meetings`, 3). 1,187 known rows, 222
+  events. Meetings are counted in order, not by page number (p051 is not
+  used). dbt unit test with a page-number gap.
+- `export` writes both modelling tables, each checked and with a manifest.
+- `src/chama/models`: a `Target` describes each target (table, label, time,
+  features); tests, imbalance strategies, prior correction, SHAP and MLflow
+  work for both, each target in its own MLflow experiment. Runs are tagged
+  with their `training_batch`.
+- `python -m chama.pipeline train --target ...`; notebooks 02 and 03 take a
+  `TARGET`, 01 explores both tables, 03 explains the best run of the latest
+  batch.
+
+### Changed
+- Loan-default features use money only as ratios (D-020 update): `amount` and
+  `outstanding_at_issue` replaced by `outstanding_vs_amount`.
+- Settings under `modelling:` are shared, with one block per target under
+  `modelling.targets` (`min_training_events` replaces `min_training_defaults`).
+
+### Found
+- The early-warning target ranks future missed repayments above chance
+  (walk-forward PR AUC 0.31, interval 0.26–0.37, against 0.20; ROC AUC 0.65);
+  loan default still does not (ROC AUC about 0.5). Details in D-021.
+
 ### Added — modelling table and export (Milestone 2 start)
 - `analytics.loan_features` (dbt): one row per loan with features known when
   it was given (earlier loans, loans open at issue, recent repayments and
