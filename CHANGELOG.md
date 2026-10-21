@@ -6,6 +6,15 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
 ## [Unreleased] — branch `m2-features-models`
 
+### Changed — risk bands set by share (D-022)
+- `band_shares` per target replaces the fixed `risk_bands` cut-offs: top 20%
+  high, next 30% medium. Each run computes its score cut-offs from its
+  walk-forward scores and logs them (`band_cutoff_medium`, `band_cutoff_high`);
+  the band table gives each band's event rate with a bootstrap 95% interval.
+- New run metrics `low_band_event_rate` and `high_to_low_rate_ratio`.
+- Notebook 02 shows the band table of the best run; notebook 03 shows what
+  each band meant in testing and scores open rows with the run's cut-offs.
+
 ### Added — a second target: early warning of missed repayments (D-021)
 - `analytics.member_months` (dbt): one row per member per meeting while a loan
   runs, with features known after the meeting and `missed_ahead` (a repayment
