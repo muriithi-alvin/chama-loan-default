@@ -1,0 +1,145 @@
+version: 2
+
+models:
+  - name: member_months
+    description: >
+      One row per member per meeting while the member carries a loan: the
+      member's record up to and including that meeting (features) and whether
+      a repayment was missed in the next warning_horizon_meetings meetings
+      (the early-warning label, decision D-021). Codes only; exported for
+      modelling beside loan_features.
+    columns:
+      - name: member_month_id
+        data_tests: [unique, not_null]
+      - name: member_code
+        data_tests: [not_null]
+      - name: meeting_month
+        data_tests: [not_null]
+      - name: meeting_year
+        description: For splitting by time
+      - name: month_of_year
+        description: 1-12; school fees fall due in January, May and September
+      - name: open_loans
+        description: Loans the member still owes on after the meeting
+      - name: outstanding_vs_chama_median
+        description: Total owed divided by the Chama's median normal loan in the recent months
+      - name: oldest_open_loan_months
+        description: Age in months of the oldest loan still owed on
+      - name: loan_started_this_meeting
+        description: One of the loans first appears at this meeting
+      - name: months_in_records
+        description: Months since the member's first line in the records (records start January 2014)
+      - name: loans_so_far
+        description: The member's loans started up to this meeting
+      - name: prior_rolled_over
+        description: The member's loans rolled into a bigger loan up to this meeting
+      - name: missed_last_3_meetings
+        description: Meetings among this and the two before where a running loan got no repayment
+      - name: recent_missed
+        description: Meetings in the recent months where a running loan got no repayment
+      - name: recent_missed_share
+        description: Share of the recent meetings with a running loan where no repayment was made
+      - name: repayment_ratio_last_3_meetings
+        description: Average repayment as a share of the balance over this and the two meetings before (capped at 1)
+      - name: months_since_last_miss
+        description: Months since the last missed repayment; empty if none
+      - name: recent_contribution_rate
+        description: Share of the recent meetings with recorded contributions where the member contributed; empty before 2017
+      - name: chama_missed_share
+        description: Share of the Chama's running loans with no repayment at this meeting
+      - name: missed_ahead
+        description: 1 if a repayment is missed in the next warning_horizon_meetings meetings, 0 if not, empty when the records end too soon
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+                quote: false
+      - name: in_training
+        description: The label is known, so models may learn from this row
+        data_tests: [not_null]
+      - name: outcome_month
+        description: Month of the last meeting the label looks at; a model tested on a year learns only from rows known before it
+        data_tests:
+          - not_null:
+              config:
+                where: "in_training"
+
+unit_tests:
+  - name: member_months_look_back_for_features_and_ahead_for_the_label
+    description: >
+      M-1 repays loan L over pages 1-5 and misses page 3; M-2 repays loan K on
+      page 3 and misses page 5. Page 6 is not used (as with a retaken photo), so
+      the sixth meeting is page 7. With a 2-meeting horizon, page 5 of M-2 is
+      too close to the end of the records to know its label.
+    model: member_months
+    overrides:
+      vars:
+        warning_horizon_meetings: 2
+        history_months: 12
+    given:
+      - input: ref('meetings')
+        rows:
+          - {chama_id: c, page_no: 1, meeting_month: 2020-01-01}
+          - {chama_id: c, page_no: 2, meeting_month: 2020-02-01}
+          - {chama_id: c, page_no: 3, meeting_month: 2020-03-01}
+          - {chama_id: c, page_no: 4, meeting_month: 2020-04-01}
+          - {chama_id: c, page_no: 5, meeting_month: 2020-05-01}
+          - {chama_id: c, page_no: 7, meeting_month: 2020-06-01}
+      - input: ref('loans')
+        rows:
+          - {loan_id: L, chama_id: c, member_code: M-1, loan_type: normal, issued_month: 2020-01-01,
+             first_month: 2020-01-01, amount_given: 10000, first_balance: 10000, rolled_into_loan_id: null}
+          - {loan_id: K, chama_id: c, member_code: M-2, loan_type: normal, issued_month: 2020-02-01,
+             first_month: 2020-03-01, amount_given: 5000, first_balance: 5000, rolled_into_loan_id: null}
+      - input: ref('loan_lines')
+        rows:
+          - {loan_id: L, chama_id: c, member_code: M-1, line_seq: 1, page_no: 1, meeting_month: 2020-01-01,
+             line_kind: loan_given, opening_balance: 10000, repayment: null, closing_balance: 10000}
+          - {loan_id: L, chama_id: c, member_code: M-1, line_seq: 2, page_no: 2, meeting_month: 2020-02-01,
+             line_kind: balance, opening_balance: 10000, repayment: 1000, closing_balance: 9000}
+          - {loan_id: L, chama_id: c, member_code: M-1, line_seq: 3, page_no: 3, meeting_month: 2020-03-01,
+             line_kind: balance, opening_balance: 9000, repayment: 0, closing_balance: 9000}
+          - {loan_id: L, chama_id: c, member_code: M-1, line_seq: 4, page_no: 4, meeting_month: 2020-04-01,
+             line_kind: balance, opening_balance: 9000, repayment: 3000, closing_balance: 6000}
+          - {loan_id: L, chama_id: c, member_code: M-1, line_seq: 5, page_no: 5, meeting_month: 2020-05-01,
+             line_kind: balance, opening_balance: 6000, repayment: 6000, closing_balance: 0}
+          - {loan_id: K, chama_id: c, member_code: M-2, line_seq: 1, page_no: 3, meeting_month: 2020-03-01,
+             line_kind: balance, opening_balance: 5000, repayment: 500, closing_balance: 4500}
+          - {loan_id: K, chama_id: c, member_code: M-2, line_seq: 2, page_no: 5, meeting_month: 2020-05-01,
+             line_kind: balance, opening_balance: 4500, repayment: null, closing_balance: 4500}
+      - input: ref('statements')
+        rows:
+          - {chama_id: c, member_code: M-1, page_no: 1, meeting_month: 2020-01-01, monthly_amount: null}
+          - {chama_id: c, member_code: M-2, page_no: 3, meeting_month: 2020-03-01, monthly_amount: null}
+    expect:
+      rows:
+        - {member_code: M-1, page_no: 1, open_loans: 1, outstanding_vs_chama_median: 1.0,
+           oldest_open_loan_months: 0, loan_started_this_meeting: true, months_in_records: 0,
+           missed_last_3_meetings: 0, recent_missed_share: null, repayment_ratio_last_3_meetings: null,
+           months_since_last_miss: null, chama_missed_share: null,
+           missed_ahead: 1, in_training: true, outcome_month: 2020-03-01}
+        - {member_code: M-1, page_no: 2, open_loans: 1, outstanding_vs_chama_median: 1.2,
+           oldest_open_loan_months: 1, loan_started_this_meeting: false, months_in_records: 1,
+           missed_last_3_meetings: 0, recent_missed_share: 0, repayment_ratio_last_3_meetings: 0.1,
+           months_since_last_miss: null, chama_missed_share: 0,
+           missed_ahead: 1, in_training: true, outcome_month: 2020-04-01}
+        - {member_code: M-1, page_no: 3, open_loans: 1, outstanding_vs_chama_median: 1.2,
+           oldest_open_loan_months: 2, loan_started_this_meeting: false, months_in_records: 2,
+           missed_last_3_meetings: 1, recent_missed_share: 0.5, repayment_ratio_last_3_meetings: 0.05,
+           months_since_last_miss: 0, chama_missed_share: 0.5,
+           missed_ahead: 0, in_training: true, outcome_month: 2020-05-01}
+        - {member_code: M-1, page_no: 4, open_loans: 1, outstanding_vs_chama_median: 0.8,
+           oldest_open_loan_months: 3, loan_started_this_meeting: false, months_in_records: 3,
+           missed_last_3_meetings: 1, recent_missed_share: 0.333, repayment_ratio_last_3_meetings: 0.144,
+           months_since_last_miss: 1, chama_missed_share: 0,
+           missed_ahead: 0, in_training: true, outcome_month: 2020-06-01}
+        - {member_code: M-2, page_no: 3, open_loans: 1, outstanding_vs_chama_median: 0.6,
+           oldest_open_loan_months: 1, loan_started_this_meeting: true, months_in_records: 0,
+           missed_last_3_meetings: 0, recent_missed_share: 0, repayment_ratio_last_3_meetings: 0.1,
+           months_since_last_miss: null, chama_missed_share: 0.5,
+           missed_ahead: 1, in_training: true, outcome_month: 2020-05-01}
+        - {member_code: M-2, page_no: 5, open_loans: 1, outstanding_vs_chama_median: 0.6,
+           oldest_open_loan_months: 3, loan_started_this_meeting: false, months_in_records: 2,
+           missed_last_3_meetings: 1, recent_missed_share: 0.5, repayment_ratio_last_3_meetings: 0.05,
+           months_since_last_miss: 0, chama_missed_share: 0.5,
+           missed_ahead: null, in_training: false, outcome_month: null}

@@ -20,6 +20,14 @@ rejected. Newest last. Change a decision by adding a new one that replaces it.
 | D-013 | 2026-10-08 | Statements gain a `loan_type` column for the emergency mark |
 | D-014 | 2026-10-08 | Milestone 1 closes with Chama B only |
 | D-015 | 2026-10-12 | Loan linking prefers lines of the same loan type |
+| D-016 | 2026-10-16 | Models train in Colab; only the codes-only modelling table goes to Google Drive |
+| D-017 | 2026-10-16 | The GitHub repository is private |
+| D-018 | 2026-10-16 | Point-in-time features and a provisional default label, built in dbt |
+| D-019 | 2026-10-16 | MLflow experiment tracking starts in Milestone 2 |
+| D-020 | 2026-10-16 | Walk-forward testing; imbalance strategies compared, not assumed |
+| D-021 | 2026-10-20 | A second target: an early warning of missed repayments |
+| D-022 | 2026-10-21 | Risk bands set by share of out-of-time scores |
+| D-023 | 2026-10-21 | The chosen model: random forest, no imbalance correction |
 
 ---
 
@@ -201,3 +209,250 @@ one of the same loan type first (normal, emergency, school fees), then the
 nearest page, then the closest balance. A line of another type is still used
 when no same-type line matches, because the ledger sometimes marks one loan
 differently from month to month. Extends D-010.
+
+## D-016 Train in Colab; only the modelling table goes to Drive
+**Context.** The supervisor's Sprint II workflow is: code on the laptop, push
+to GitHub, open notebooks in Google Colab, read data from and save models,
+metrics and plots to Google Drive, then review the synced results locally.
+In M1 the cloud tools were set aside because the data names real people
+(D-001).
+**Decision.** Follow the workflow, with one boundary: the only data that
+leaves this computer is `analytics.loan_features`, written by
+`python -m chama.pipeline export` as `loan_features.parquet` with a manifest.
+It holds member codes, loan types, amounts, months and features: no names and
+no free text. The export stops if the table gains a column not on its list or
+if any value contains a word of a member's name. Workbooks, photos, review
+files, the `raw` and `private` schemas and the pseudonym key never leave.
+`DRIVE_DIR` in `.env` names the project folder on Drive; it holds `data/` (the
+export) and `mlruns/` (models, metrics, plots).
+**Why.** Colab gives the supervisor an environment to open and rerun; it is
+not needed for speed (a few hundred loans train in seconds). The export keeps
+D-001's promise: everything outside this computer sees codes only.
+**Consequences.** Pseudonymised data is still personal data: with about a
+dozen members, someone who knows the group could recognise a member from loan
+sizes and dates. The officials confirmed on 2026-10-16 that their permission
+covers storing it on Google Drive. Notebooks also run locally from the same folder
+(synced by Drive for desktop), so work does not depend on Colab.
+
+## D-017 Private GitHub repository
+**Context.** In the workflow, Colab saves notebook changes straight to GitHub,
+outputs included, without passing through local git or its checks. Outputs
+show member codes, amounts and dates.
+**Decision.** The repository is private (changed 2026-10-16; it had no stars,
+forks or Pages site). The supervisor is added as a collaborator.
+**Consequences.** Colab needs GitHub authorisation to open notebooks, and a
+read-only access token stored in Colab Secrets to install the `chama` package
+from the repository. Outputs in notebooks hold nothing beyond what D-016
+allows, because notebooks read only the exported table.
+
+## D-018 Point-in-time features and a provisional label
+**Context.** Section 11 of the M1 report showed the 12-month rule does not
+describe practice, so the default label must be agreed with the Chama. Work
+cannot wait for that.
+**Decision.** `analytics.loan_features` (dbt) has one row per loan with a known
+issue month. Features use only meetings before the issue month and earlier
+loans as they stood then; a dbt unit test checks this on made-up loans.
+`defaulted` is 1 when the status is in `default_statuses` in
+`config/pipeline.yaml`, provisionally `topped_up`, `overdue` and `lost_track`;
+0 for other finished loans; empty while the outcome is unknown.
+**Why.** Features in dbt are tested and rebuilt with the data, and the M4
+dashboard can reuse them; notebooks only model. Keeping the label rule in the
+config means the agreed definition changes one line.
+**Update 2026-10-16.** Confirmed: an overdue loan is a default. `topped_up` and
+`lost_track` stay provisional. All six overdue loans (2023–2025) are normal
+loans of 250,000–350,000 with no due month written, so they are judged by the
+12-month rule while still being repaid; if the Chama agreed a longer term for
+large loans, `loan_term_days` should say so, or these count as defaults.
+**Consequences.** `lost_track` is in the label, so unlinked name spellings now
+create false defaults. The warning test `loan_continues_under_another_member`
+lists loans that seem to continue under another member code; these must be
+resolved in the name review before training.
+
+## D-019 MLflow tracking starts in Milestone 2
+**Decision.** Training runs log their settings, metrics, plots, SHAP results
+and the model to MLflow from the first model. In Colab the tracking folder is
+`mlruns/` on Drive; locally `mlflow ui` reads the same folder through Drive
+for desktop. Milestone 3 keeps the model registry, serving, Evidently
+monitoring, Docker and scheduling.
+**How.** MLflow 3 keeps folder tracking in maintenance mode and refuses it
+unless `MLFLOW_ALLOW_FILE_STORE=true`; the code sets this. The recommended
+SQLite database is a single file that Colab's Drive mount and Drive for
+desktop would both write, which risks corrupting it; a folder of small files
+syncs safely. In M3 the runs can move to a database (for example the
+project's PostgreSQL) with `mlflow migrate-filestore`. Models are saved with
+cloudpickle, because MLflow's default (skops) refuses the imbalanced-learn and
+XGBoost types; they are only loaded back from the project's own folder.
+**Why.** The MLOps Zoomcamp introduces experiment tracking right after the
+first model (module 2), and the workflow's "save models, metrics, plots and
+logs" step is what MLflow does. Comparing models without it means comparing
+loose files.
+
+## D-020 Walk-forward testing; imbalance strategies compared
+**Context.** A few hundred loans from about a dozen members over twelve years,
+roughly one default in six. Random train/test splits would let a model learn
+from later loans of the same members and from outcomes nobody knew yet, and
+would overstate how well it works.
+**Decision.**
+- **Main test: walk forward.** For each year 2018–2024, train only on loans
+  given and resolved (`outcome_month`) before that year, then score that
+  year's loans; the years are pooled for the metrics. Loans given after 2024
+  have had too little time to show a default and are not tested. A year needs
+  at least 5 known defaults before it: 2018 and 2019 train on 5–6, but
+  without them the test rests on 12 defaults instead of 22.
+- **Second check: members held out** (grouped folds), for how the model would
+  do on a member it has not seen.
+- **Metrics:** precision-recall AUC (chance level is the share of defaults),
+  ROC AUC and the Brier score, with bootstrap 95% intervals, plus how the risk
+  bands sorted the test loans.
+- **Imbalance:** at the project owner's request, k-means based resampling is
+  included. Every model is trained four ways and compared on the same tests:
+  no correction, class weights, k-means SMOTE (synthetic defaults inside
+  k-means clusters) and k-means cluster centroids (repaid loans reduced to one
+  real loan per cluster). Resampling runs inside the training folds only.
+  These strategies train as if half the loans defaulted, so their scores are
+  moved back to the real share of defaults (prior correction: odds multiplied
+  by share / (1 − share); Saerens et al. 2002, Dal Pozzolo et al. 2015). The
+  order of the scores, and so PR AUC and ROC AUC, is unchanged; the Brier
+  score and the risk bands become comparable with `none`.
+- **Choice:** the best walk-forward PR AUC, unless its Brier score shows the
+  scores cannot be read as risks; differences within the intervals are not
+  treated as wins.
+**Why.** A study of clinical risk models (van den Goorbergh et al., "The harm
+of class imbalance corrections for risk prediction models", JAMIA 2022) found
+that random over- and undersampling and SMOTE did not improve the ranking of
+logistic regression models and made their probabilities overestimate risk,
+which officials here would read as a member's risk. Testing the strategies on
+this data, rather than assuming they help or hurt, gives evidence either way.
+**Results, 2026-10-19** (clean names; 263 loans, 247 with a known outcome,
+28 provisional defaults):
+- Walk forward (133 test loans, 22 defaults, chance PR AUC 0.165): ROC AUC
+  0.50–0.55 for every model and strategy, so no model ranks future loans
+  reliably. XGBoost with k-means cluster centroids had the best PR AUC (0.355,
+  interval 0.19–0.54), stable across seeds, from ranking a few defaults first.
+- Members held out (247 loans, 28 defaults, chance 0.113): the tree models
+  reach ROC AUC 0.62–0.68 (lower interval bounds 0.50–0.58); logistic
+  regression 0.54–0.60. Brier scores match giving every loan the average risk.
+- No imbalance strategy wins on both tests. Before the prior correction,
+  weighting and resampling pushed every loan into the high band.
+- SHAP: loan amount, amount against the member's largest earlier loan, number
+  of earlier loans and loan type weigh most. Raw amounts grew about six-fold
+  over the records; dropping them cost nothing in a separate comparison.
+The first run, before the name review was fixed, is not comparable (labels
+included 11 split-member artefacts).
+**Update 2026-10-20.** Money is used only as ratios: `amount` and
+`outstanding_at_issue` are replaced by `outstanding_vs_amount` (debt owed
+relative to the new loan), beside `amount_vs_own_max` and
+`amount_vs_chama_median`. Loan sizes grew about six-fold over the records, so
+raw amounts compare loans of different years unfairly; the walk-forward test
+showed no loss of ranking and a slightly better Brier score without them.
+
+## D-021 A second target: early warning of missed repayments
+**Context.** The loan-default target has 28 provisional defaults among 247
+loans with a known outcome, and no model ranks future loans reliably (D-020).
+A few dozen events cannot support a trustworthy model, whatever the method.
+**Decision.** Add a second target beside loan default, built from the same
+ledger: `analytics.member_months` has one row per member per meeting while the
+member owes on a loan, with features known after that meeting and the label
+`missed_ahead`: a running loan gets no repayment in the next
+`warning_horizon_meetings` (3) meetings. 1,187 rows have a known label, 222 of
+them events (about 1 in 5). Both targets share the same tests (walk forward,
+members held out), imbalance strategies, prior correction, SHAP and MLflow,
+each in its own MLflow experiment (`chama-loan-default`,
+`chama-missed-repayment`).
+**Why.** Officials gain an early warning between loan requests (who is likely
+to fall behind soon), and the model has eight times as many events to learn
+from. Missed repayments are written in the ledger as they happen, so the label
+needs no agreement on loan terms.
+**Consequences.** Meetings are counted in order (`meeting_seq`), not by page
+number, because page numbers skip where a photo was retaken. A missed
+repayment is a written line with no repayment; meetings a member did not
+appear at are not counted. The loan-default target stays the main one for
+loan requests; the report presents both.
+**Results, 2026-10-20** (one training batch, both targets; walk forward unless
+stated):
+- `missed_repayment` (10 test years, 1,187 rows, chance PR AUC 0.20): the
+  random forest ranks future misses above chance. Best PR AUC 0.31 (interval
+  0.26–0.37) with class weights, 0.29 with k-means SMOTE, 0.26 without a
+  correction; ROC AUC 0.64–0.65. Members held out: ROC AUC 0.55–0.68, best
+  logistic regression. Brier scores equal giving every row the average risk,
+  so the scores rank members but are not yet reliable probabilities.
+- `loan_default` with money as ratios (7 test years, chance 0.165): ROC AUC
+  0.48–0.55; best PR AUC 0.27 (interval 0.14–0.46), XGBoost with k-means
+  cluster centroids. No reliable ranking of future loans.
+- Imbalance: on the early-warning target, class weights and k-means SMOTE
+  gave the random forest small gains in PR AUC within the intervals; k-means
+  cluster centroids lowered it. No strategy wins on both tests for either
+  target.
+
+## D-022 Risk bands set by share of out-of-time scores
+**Context.** The bands were fixed score cut-offs (0.15 and 0.30 for loan
+default, 0.20 and 0.40 for missed repayments). The best early-warning model
+ranks members well but its scores are compressed: 95% of its walk-forward
+scores lie below 0.27, so the high band held 3 of 938 test rows. Its Brier
+score equals giving everyone the average risk, so the scores are not reliable
+probabilities and should not be shown to officials as such.
+**Decision.** Bands are set by share, per target (`band_shares` in
+`config/pipeline.yaml`): the top 20% of scores are high, the next 30% medium,
+the bottom 50% low. Each training run turns the shares into score cut-offs
+from its own walk-forward scores, logs them to MLflow
+(`band_cutoff_medium`, `band_cutoff_high`) with a band table giving each
+band's event rate and a bootstrap 95% interval, and the rows still open are
+scored with the chosen run's cut-offs. Officials see the band and what it
+meant in testing, not the raw score.
+**Why.** Bands by share use what the models do well, which is ranking; the
+cut-offs are tested out of time, so the band rates are honest; and a fixed
+share fixes the follow-up workload (about one member in five in the high
+band).
+**Results** (random forest with class weights, early-warning target, 938
+walk-forward rows): in testing a repayment was missed within 3 meetings by
+12% of low-band rows (interval 9–15%), 25% of medium (20–30%) and 33% of high
+(26–40%): the high band had the event almost three times as often as the low
+band, and the event rate rose across every fifth of the scores (8, 14, 22, 24
+and 33%). For loan default no run's bands separate defaults (by fifth of the
+scores, for example 19, 19, 7, 12 and 26%); its bands are computed the same
+way but should not be presented as meaningful until the label is agreed and
+there are more defaults.
+The final numbers for the chosen model are in D-023.
+**Consequences.** The shares are provisional, to agree with the Chama (for
+example, how many members the officials can follow up each month). The
+cut-offs change with every training batch, so the M4 dashboard must read them
+from the chosen run, not from the config.
+
+## D-023 The chosen model: random forest, no imbalance correction
+**Context.** D-020 compared three models and four imbalance strategies per
+target; most differences lay within the intervals. The project owner chose the
+random forest.
+**Decision.** For both targets: a random forest of 500 trees, depth 4, at
+least 20 rows per leaf, without an imbalance correction (`chosen` under each
+target in `config/pipeline.yaml`). `chama.models.chosen` loads the chosen run
+of the latest training batch with its band cut-offs; notebook 03, and later
+the officials' dashboard (M4), score with it.
+**Sensitivity check.** The forest (with class weights) was tested walking
+forward at depths 3, 4, 6 and 8 with at least 5, 10 or 20 rows per leaf. All
+results lay within each other's intervals, so the conclusions do not depend on
+these settings. Leaves of at least 20 rows did a little better on both targets
+at every depth (early warning: PR AUC 0.32–0.33 against 0.27–0.32, Brier 0.155
+against up to 0.168), so the forest uses 20. The setting was picked on the
+same test, so part of that small gain may be luck.
+**Why no correction.** With 20-row leaves, class weights no longer helped:
+the same PR AUC (0.323 without, 0.324 with) and, without them, an equal or
+better ROC AUC (0.670), Brier score (0.152), members-held-out ROC AUC (0.640)
+and band separation. Without a correction the model is also simpler: no
+weights and no prior correction. k-means SMOTE (PR AUC 0.305) and k-means
+cluster centroids (0.281) were tested and not adopted.
+**Results** (final batch, 2026-10-21, walk forward):
+- Early warning: PR AUC 0.323 (interval 0.27–0.38) against 0.20 by chance;
+  ROC AUC 0.670; members held out 0.640. A repayment was missed within 3
+  meetings by 11.9% of low-band rows (9–15%), 23.8% of medium (19–29%) and
+  35.1% of high (28–42%); the high band held 35% of all misses. Strongest
+  factors (SHAP): months since the member last missed a repayment (and whether
+  they ever have), the share of recent meetings missed, months of membership,
+  the recent repayment ratio, the number of loans and past roll-overs.
+- Loan default: PR AUC 0.228 (0.13–0.42) against 0.165, ROC AUC 0.535: not
+  reliable. Its bands (15%, 10%, 30%) are out of order with overlapping
+  intervals.
+**Consequences.** The early-warning model is the one ready to show officials.
+The loan-default model is carried forward so the pipeline is complete, but its
+category should not be presented as meaningful (D-022) until the default label
+is agreed with the Chama and there are more defaults. Every new training batch
+updates the chosen run and its cut-offs.

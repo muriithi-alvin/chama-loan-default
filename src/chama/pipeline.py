@@ -8,12 +8,15 @@ Usage:
     python -m chama.pipeline anonymise         # 3. raw -> staging, names -> codes
     python -m chama.pipeline clean             # 4. staging -> analytics with dbt, checks, report
     python -m chama.pipeline dbt <args>        #    any dbt command, e.g. "dbt test"
+    python -m chama.pipeline export            # 5. modelling tables (codes only) -> Google Drive
+    python -m chama.pipeline train             # 6. train, test and log the models (MLflow)
 
 Add --help after any step for details.
 """
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 import click
 
@@ -161,6 +164,72 @@ def dbt_command(args: tuple[str, ...]) -> None:
     if not args:
         raise click.UsageError("Give a dbt command, e.g. python -m chama.pipeline dbt test")
     _run(lambda: run_dbt(list(args), load_config()))
+
+
+@cli.command()
+@click.option(
+    "--to", "out_dir", type=click.Path(file_okay=False, path_type=Path),
+    help="Folder to write to (default: <DRIVE_DIR>/data, else data/processed).",
+)
+def export(out_dir: Path | None) -> None:
+    """Write the modelling tables for Colab, each as Parquet with a manifest.
+
+    Only analytics.loan_features and analytics.member_months are written:
+    member codes and features, no names, no free text (decision D-016). Stops,
+    writing nothing, if a table has a column not cleared for export or a value
+    containing a member's name. Set DRIVE_DIR in .env to the project folder on
+    Google Drive; the tables go to its data/ folder, which the Colab notebooks
+    read.
+    """
+    from chama.features.export import run
+
+    _run(lambda: run(load_config(), get_engine(), out_dir))
+
+
+@cli.command()
+@click.option(
+    "--target", "targets", multiple=True,
+    type=click.Choice(["loan_default", "missed_repayment"]),
+    help="Train only this target (repeat for both). Default: every target in config.",
+)
+@click.option(
+    "--data-dir", type=click.Path(file_okay=False, path_type=Path),
+    help="Folder with the exported tables (default: <DRIVE_DIR>/data, else data/processed).",
+)
+@click.option(
+    "--model", "models", multiple=True,
+    type=click.Choice(["logistic_regression", "random_forest", "xgboost"]),
+    help="Train only this model (repeat for more). Default: all in config.",
+)
+@click.option(
+    "--imbalance", multiple=True,
+    type=click.Choice(["none", "class_weight", "kmeans_smote", "cluster_centroids"]),
+    help="Only this imbalance strategy (repeat for more). Default: all in config.",
+)
+def train(targets: tuple[str, ...], data_dir: Path | None, models: tuple[str, ...],
+          imbalance: tuple[str, ...]) -> None:
+    """Train and test the models on the exported tables; log each run to MLflow.
+
+    Two targets: loan_default (will this loan default?) and missed_repayment
+    (will a repayment be missed in the next meetings?). Every model is tested
+    walking forward in time and with members held out, once per imbalance
+    strategy. Runs go to <DRIVE_DIR>/mlruns (else ./mlruns), one MLflow
+    experiment per target; view them with the mlflow ui command printed at the
+    end. Does not need the database.
+    """
+    from chama.config import mlflow_dir
+    from chama.models.train import run, summary_table
+
+    def go() -> None:
+        summary, _ = run(targets=list(targets) or None, data_dir=data_dir,
+                         models=list(models) or None, imbalance=list(imbalance) or None)
+        print()
+        print(summary_table(summary).to_string(index=False))
+        print("\nCompare runs in the browser (PowerShell):")
+        print('  $env:MLFLOW_ALLOW_FILE_STORE = "true"')
+        print(f'  mlflow ui --backend-store-uri "{mlflow_dir().resolve().as_uri()}"')
+
+    _run(go)
 
 
 if __name__ == "__main__":

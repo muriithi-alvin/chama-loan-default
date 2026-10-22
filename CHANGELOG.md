@@ -4,7 +4,128 @@ All notable changes to this project are recorded here, newest first.
 Each entry links to its issue or pull request where one exists.
 Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
-## [Unreleased] — branch `m1-data-pipeline`
+## M2 — branch `m2-features-models` (merged)
+
+### Added — Milestone 2 report
+- `docs/milestone_2_report.md`: the working method, data correction, both
+  targets, features, models and imbalance strategies, testing, results,
+  the chosen model, risk bands, explanations, limitations, commands and the
+  plan for M3, with every run of the final batch and the sensitivity check.
+- README: M2 marked done, link to the report.
+
+### Added — the chosen model (D-023)
+- `chosen` per target in `config/pipeline.yaml`: random forest without an
+  imbalance correction, for both targets.
+- `chama.models.chosen`: `chosen_run` (the chosen model's run from the latest
+  batch) and `chosen_model` (its fitted model and band cut-offs), for
+  notebook 03 and the M4 dashboard. Tests in `tests/test_chosen.py`.
+- Notebook 03 explains and scores with the chosen model.
+
+### Changed
+- Random forest leaves hold at least 20 rows (was 5), after a sensitivity
+  check of depth and leaf size on the walk-forward test (D-023).
+
+### Found
+- Early warning, chosen model: walk-forward PR AUC 0.323 (0.27–0.38) against
+  0.20; risk bands missed 11.9% / 23.8% / 35.1% of the time in testing.
+
+### Changed — risk bands set by share (D-022)
+- `band_shares` per target replaces the fixed `risk_bands` cut-offs: top 20%
+  high, next 30% medium. Each run computes its score cut-offs from its
+  walk-forward scores and logs them (`band_cutoff_medium`, `band_cutoff_high`);
+  the band table gives each band's event rate with a bootstrap 95% interval.
+- New run metrics `low_band_event_rate` and `high_to_low_rate_ratio`.
+- Notebook 02 shows the band table of the best run; notebook 03 shows what
+  each band meant in testing and scores open rows with the run's cut-offs.
+
+### Added — a second target: early warning of missed repayments (D-021)
+- `analytics.member_months` (dbt): one row per member per meeting while a loan
+  runs, with features known after the meeting and `missed_ahead` (a repayment
+  missed in the next `warning_horizon_meetings`, 3). 1,187 known rows, 222
+  events. Meetings are counted in order, not by page number (p051 is not
+  used). dbt unit test with a page-number gap.
+- `export` writes both modelling tables, each checked and with a manifest.
+- `src/chama/models`: a `Target` describes each target (table, label, time,
+  features); tests, imbalance strategies, prior correction, SHAP and MLflow
+  work for both, each target in its own MLflow experiment. Runs are tagged
+  with their `training_batch`.
+- `python -m chama.pipeline train --target ...`; notebooks 02 and 03 take a
+  `TARGET`, 01 explores both tables, 03 explains the best run of the latest
+  batch.
+
+### Changed
+- Loan-default features use money only as ratios (D-020 update): `amount` and
+  `outstanding_at_issue` replaced by `outstanding_vs_amount`.
+- Settings under `modelling:` are shared, with one block per target under
+  `modelling.targets` (`min_training_events` replaces `min_training_defaults`).
+
+### Found
+- The early-warning target ranks future missed repayments above chance
+  (walk-forward PR AUC 0.31, interval 0.26–0.37, against 0.20; ROC AUC 0.65);
+  loan default still does not (ROC AUC about 0.5). Details in D-021.
+
+### Added — modelling table and export (Milestone 2 start)
+- `analytics.loan_features` (dbt): one row per loan with features known when
+  it was given (earlier loans, loans open at issue, recent repayments and
+  contributions, size against the member's and the Chama's loans) and a
+  provisional label `defaulted` from `default_statuses` in
+  `config/pipeline.yaml` (decision D-018). A dbt unit test checks that nothing
+  after the issue month is used.
+- Warning test `loan_continues_under_another_member`: a lost-track loan whose
+  balance is picked up by another member's new loan, usually one person under
+  two unlinked spellings. 15 found in Chama B (three pairs of codes).
+- `python -m chama.pipeline export`: writes the modelling table and a manifest
+  (rows, label rule, git commit) to `<DRIVE_DIR>/data` for Colab, after checking
+  every column is cleared for export and no value holds a member's name
+  (decision D-016). Tests in `tests/test_export.py`.
+- `pyarrow` dependency; `ml` extra (scikit-learn, imbalanced-learn, XGBoost,
+  SHAP, MLflow, matplotlib). `*.parquet` ignored by git.
+- Decisions D-016 to D-019: Colab and Drive with a codes-only boundary, private
+  repository, point-in-time features and provisional label, MLflow from M2.
+
+### Added — training, testing and explanation
+- `loan_features.outcome_month`: when each outcome became known, so a test
+  year learns only from outcomes known before it. dbt unit test extended.
+- `src/chama/models/`: three models (logistic regression, random forest,
+  XGBoost) × four imbalance strategies (none, class weights, k-means SMOTE,
+  k-means cluster centroids; resampling inside training folds only);
+  walk-forward test 2019–2024 and a members-held-out check; PR AUC, ROC AUC
+  and Brier score with bootstrap intervals; risk bands; SHAP explanations
+  (decision D-020). Settings under `modelling:` in `config/pipeline.yaml`.
+- `python -m chama.pipeline train`: runs every combination and logs each to
+  MLflow (params, data version, metrics, plots, scores, the final model).
+  Tests in `tests/test_models.py` (made-up loans).
+- Notebooks `01_explore_features`, `02_train_and_compare`, `03_explain_risk`,
+  runnable in Colab (first cell mounts Drive and fetches the code with a
+  token from Colab Secrets) and locally.
+- `DRIVE_DIR` in `.env` (replaces `EXPORT_DIR`): the project folder on Google
+  Drive, holding `data/` and `mlruns/`.
+
+### Changed — testing after the name review was fixed
+- The name review again links the six split member codes (12 members): 263
+  loans, 7 lost track, 28 provisional defaults, matching the M1 report.
+- Prior correction (`PriorCorrectedPipeline`): models trained with class
+  weights or k-means resampling have their scores moved back to the real
+  share of defaults, so the Brier score and risk bands are comparable. Test
+  in `tests/test_models.py`.
+- Walk-forward test years 2018–2024 with at least 5 known defaults before
+  each (was 2019–2024, 8): 22 test defaults instead of 12.
+- First results recorded in D-020: no model ranks future loans reliably
+  (walk-forward ROC AUC 0.50–0.55); tree models reach 0.62–0.68 with members
+  held out; no imbalance strategy wins on both tests.
+
+### Changed
+- The GitHub repository is private (D-017).
+- D-016: the officials confirmed that their permission covers keeping the
+  codes-only table on Google Drive.
+
+### Found
+- The database built from the merged M1 code gives 277 loans, 17 member codes
+  and 21 lost-track loans, not the 263, 13 and 7 in the M1 report. About 11 of
+  the lost-track loans continue under a second code for the same person;
+  their spellings need linking in the name review.
+
+## M1 — branch `m1-data-pipeline` (merged)
 
 ### Added — the whole ledger extracted (2021 to April 2026)
 - **2021–2026 extracted** from photos p086–p149 into `2021.xlsx` … `2026.xlsx`

@@ -176,6 +176,8 @@ Full column descriptions: `python -m chama.pipeline dbt docs generate`.
 | `attendance` | member per meeting | `status` (`present`, `absent`, `apology`, `late`) |
 | `loan_lines` | statement line | `loan_id`, `line_seq`, `link` (`start`, `continued`, `continued_with_top_up`, `repayment_unlinked`, `not_a_loan`), `carry_difference`, `top_up_amount` |
 | `loans` | loan | `loan_type`, `issued_month` + `issue_source`, `due_month` + `due_source`, `cleared_month`, `outstanding_at_due`, `months_late`, `status` |
+| `loan_features` | loan with a known issue month | the modelling table (M2): the member's record before the loan was given, `defaulted` (provisional label) and `in_training`; see below |
+| `member_months` | member per meeting while a loan runs | the early-warning table (M2): the member's record up to the meeting, `missed_ahead` (a repayment missed in the next 3 meetings) and `in_training`; see below |
 | `quality_report` | measure per Chama and year | counts of rows, flagged rows, missing values, estimated dates, links, statuses |
 
 **How values are read.** Amounts: commas, spaces, `/=` and `Ksh` are dropped,
@@ -189,3 +191,40 @@ to 20, is a rate; a larger number is an amount.
 `repaid` (no due month known), `overdue` (not cleared, due month passed),
 `open` (not yet due when the records end), `open_no_due_date`, `lost_track`
 (stops appearing while the records go on: check member names and the photos).
+
+## `loan_features` — the modelling table (Milestone 2)
+
+One row per loan with a known issue month (loans already running on the first
+page are left out). Every feature uses only meetings **before** the issue
+month and earlier loans as they stood then (decision D-018). "Recent" means
+the `history_months` (12) before the issue month. Column descriptions are in
+`transform/models/features/features.yml`.
+
+| Group | Columns |
+| --- | --- |
+| Keys and time | `loan_id`, `chama_id`, `member_code`, `issued_month`, `issue_year`, `issue_source` |
+| The request | `loan_type`, `amount`, `is_rollover`, `amount_vs_own_max`, `amount_vs_chama_median` |
+| Member's record | `months_in_records`, `prior_loans`, `prior_repaid`, `prior_repaid_late`, `prior_rolled_over`, `recent_emergency_loans`, `recent_school_fees_loans` |
+| Position at issue | `open_loans_at_issue`, `outstanding_at_issue`, `oldest_open_loan_months` |
+| Recent behaviour | `recent_balance_lines`, `recent_missed_share`, `recent_repayment_ratio`, `recent_contribution_rate` (contributions are written from 2017) |
+| Outcome | `status`, `defaulted` (1 if `status` is in `default_statuses`, provisionally `topped_up`, `overdue`, `lost_track`; empty while unknown), `in_training`, `outcome_month` (when the outcome became known; used so a test year learns only from outcomes known before it, D-020) |
+
+## `member_months` — the early-warning table (Milestone 2)
+
+One row per member per meeting while the member owes on a loan (decision
+D-021). Features use that meeting and earlier ones; the label looks at the next
+`warning_horizon_meetings` (3) meetings, counted in order (`meeting_seq`), not
+by page number. Column descriptions are in
+`transform/models/features/member_months.yml`.
+
+| Group | Columns |
+| --- | --- |
+| Keys and time | `member_month_id`, `chama_id`, `member_code`, `page_no`, `meeting_month`, `meeting_year`, `month_of_year` |
+| Loans after the meeting | `open_loans`, `outstanding_vs_chama_median`, `oldest_open_loan_months`, `loan_started_this_meeting`, `has_emergency_loan`, `has_school_fees_loan` |
+| Member's record | `months_in_records`, `loans_so_far`, `prior_rolled_over`, `missed_last_3_meetings`, `recent_missed`, `recent_missed_share`, `repayment_ratio_last_3_meetings`, `months_since_last_miss`, `recent_contribution_rate` |
+| The Chama | `chama_missed_share` (share of running loans with no repayment at this meeting) |
+| Outcome | `missed_ahead` (1 if a running loan gets no repayment in the next 3 meetings; empty near the end of the records), `in_training`, `outcome_month` |
+
+`python -m chama.pipeline export` writes these two tables, and nothing else, as
+`loan_features.parquet` and `member_months.parquet` for Colab (decision
+D-016).
