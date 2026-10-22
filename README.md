@@ -163,7 +163,10 @@ and 03:
 The same notebooks run here in the `chama` environment, and
 `python -m chama.pipeline train` runs the training for both targets without a
 notebook (`--target missed_repayment` for one). Each target has its own MLflow
-experiment. To compare the runs in the browser:
+experiment. The model carried forward for each target is set under `chosen` in
+`config/pipeline.yaml` (random forest without an imbalance correction, D-023);
+`chama.models.chosen.chosen_model` loads its latest run with its band cut-offs.
+To compare the runs in the browser:
 
 ```powershell
 $env:MLFLOW_ALLOW_FILE_STORE = "true"
