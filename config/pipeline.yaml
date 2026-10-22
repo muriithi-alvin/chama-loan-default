@@ -57,6 +57,9 @@ modelling:
       min_training_events: 5   # skip a test year with fewer known events before it
       # Computed the same way, but no run's bands separate defaults yet (D-022).
       band_shares: {high: 0.20, medium: 0.30}
+      # The model carried forward (D-023): the same as missed_repayment, since
+      # no model or strategy ranks future loans reliably.
+      chosen: {model: random_forest, imbalance: none}
     missed_repayment:        # will a repayment be missed in the next meetings? (member_months)
       experiment: chama-missed-repayment
       # 2014-2015 give the first training years; 2026 has too few known rows.
@@ -64,3 +67,6 @@ modelling:
       min_training_events: 20
       # Top 20% high, next 30% medium, bottom 50% low; to agree with the Chama.
       band_shares: {high: 0.20, medium: 0.30}
+      # The model carried forward (D-023): tied best walk-forward PR AUC with
+      # the simplest set-up; bands of 12% / 24% / 35% missed in testing.
+      chosen: {model: random_forest, imbalance: none}
