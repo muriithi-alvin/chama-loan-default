@@ -27,6 +27,7 @@ rejected. Newest last. Change a decision by adding a new one that replaces it.
 | D-020 | 2026-10-16 | Walk-forward testing; imbalance strategies compared, not assumed |
 | D-021 | 2026-10-20 | A second target: an early warning of missed repayments |
 | D-022 | 2026-10-21 | Risk bands set by share of out-of-time scores |
+| D-023 | 2026-10-21 | The chosen model: random forest, no imbalance correction |
 
 ---
 
@@ -411,7 +412,47 @@ and 33%). For loan default no run's bands separate defaults (by fifth of the
 scores, for example 19, 19, 7, 12 and 26%); its bands are computed the same
 way but should not be presented as meaningful until the label is agreed and
 there are more defaults.
+The final numbers for the chosen model are in D-023.
 **Consequences.** The shares are provisional, to agree with the Chama (for
 example, how many members the officials can follow up each month). The
 cut-offs change with every training batch, so the M4 dashboard must read them
 from the chosen run, not from the config.
+
+## D-023 The chosen model: random forest, no imbalance correction
+**Context.** D-020 compared three models and four imbalance strategies per
+target; most differences lay within the intervals. The project owner chose the
+random forest.
+**Decision.** For both targets: a random forest of 500 trees, depth 4, at
+least 20 rows per leaf, without an imbalance correction (`chosen` under each
+target in `config/pipeline.yaml`). `chama.models.chosen` loads the chosen run
+of the latest training batch with its band cut-offs; notebook 03, and later
+the officials' dashboard (M4), score with it.
+**Sensitivity check.** The forest (with class weights) was tested walking
+forward at depths 3, 4, 6 and 8 with at least 5, 10 or 20 rows per leaf. All
+results lay within each other's intervals, so the conclusions do not depend on
+these settings. Leaves of at least 20 rows did a little better on both targets
+at every depth (early warning: PR AUC 0.32–0.33 against 0.27–0.32, Brier 0.155
+against up to 0.168), so the forest uses 20. The setting was picked on the
+same test, so part of that small gain may be luck.
+**Why no correction.** With 20-row leaves, class weights no longer helped:
+the same PR AUC (0.323 without, 0.324 with) and, without them, an equal or
+better ROC AUC (0.670), Brier score (0.152), members-held-out ROC AUC (0.640)
+and band separation. Without a correction the model is also simpler: no
+weights and no prior correction. k-means SMOTE (PR AUC 0.305) and k-means
+cluster centroids (0.281) were tested and not adopted.
+**Results** (final batch, 2026-10-21, walk forward):
+- Early warning: PR AUC 0.323 (interval 0.27–0.38) against 0.20 by chance;
+  ROC AUC 0.670; members held out 0.640. A repayment was missed within 3
+  meetings by 11.9% of low-band rows (9–15%), 23.8% of medium (19–29%) and
+  35.1% of high (28–42%); the high band held 35% of all misses. Strongest
+  factors (SHAP): months since the member last missed a repayment (and whether
+  they ever have), the share of recent meetings missed, months of membership,
+  the recent repayment ratio, the number of loans and past roll-overs.
+- Loan default: PR AUC 0.228 (0.13–0.42) against 0.165, ROC AUC 0.535: not
+  reliable. Its bands (15%, 10%, 30%) are out of order with overlapping
+  intervals.
+**Consequences.** The early-warning model is the one ready to show officials.
+The loan-default model is carried forward so the pipeline is complete, but its
+category should not be presented as meaningful (D-022) until the default label
+is agreed with the Chama and there are more defaults. Every new training batch
+updates the chosen run and its cut-offs.
