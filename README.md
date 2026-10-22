@@ -12,8 +12,8 @@ the final decision stays with the officials.
 | Milestone | Focus | Status |
 | --- | --- | --- |
 | M1 | Data pipeline: ingest, anonymise, validate, clean | Done |
-| M2 | Features and models (Logistic Regression, Random Forest, XGBoost, SHAP), MLflow tracking, trained in Colab | In progress |
-| M3 | MLOps: model registry, monitoring with Evidently, Docker | Planned |
+| M2 | Features and models (Logistic Regression, Random Forest, XGBoost, SHAP), MLflow tracking, trained in Colab | Done |
+| M3 | MLOps: model registry, monitoring with Evidently, Docker | Next |
 | M4 | Dashboard for officials (Streamlit) | Planned |
 | M5 | Report and defence | Planned |
 
@@ -88,6 +88,7 @@ Each raw file has four sheets that mirror the ledger: **Statements**, **Meetings
 ## Documentation
 
 - [docs/milestone_1_report.md](docs/milestone_1_report.md) — Milestone 1: what was built, decisions, stack and all commands
+- [docs/milestone_2_report.md](docs/milestone_2_report.md) — Milestone 2: targets, features, models, tests, results, the chosen model and all commands
 - [CHANGELOG.md](CHANGELOG.md) — every change, newest first
 - [docs/decisions.md](docs/decisions.md) — design decisions and why
 - [docs/git_workflow.md](docs/git_workflow.md) — branches and how to push and merge
