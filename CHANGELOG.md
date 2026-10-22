@@ -4,7 +4,14 @@ All notable changes to this project are recorded here, newest first.
 Each entry links to its issue or pull request where one exists.
 Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
-## [Unreleased] — branch `m2-features-models`
+## M2 — branch `m2-features-models` (merged)
+
+### Added — Milestone 2 report
+- `docs/milestone_2_report.md`: the working method, data correction, both
+  targets, features, models and imbalance strategies, testing, results,
+  the chosen model, risk bands, explanations, limitations, commands and the
+  plan for M3, with every run of the final batch and the sensitivity check.
+- README: M2 marked done, link to the report.
 
 ### Added — the chosen model (D-023)
 - `chosen` per target in `config/pipeline.yaml`: random forest without an
