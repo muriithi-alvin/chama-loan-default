@@ -6,6 +6,22 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
 ## [Unreleased] — branch `m2-features-models`
 
+### Added — the chosen model (D-023)
+- `chosen` per target in `config/pipeline.yaml`: random forest without an
+  imbalance correction, for both targets.
+- `chama.models.chosen`: `chosen_run` (the chosen model's run from the latest
+  batch) and `chosen_model` (its fitted model and band cut-offs), for
+  notebook 03 and the M4 dashboard. Tests in `tests/test_chosen.py`.
+- Notebook 03 explains and scores with the chosen model.
+
+### Changed
+- Random forest leaves hold at least 20 rows (was 5), after a sensitivity
+  check of depth and leaf size on the walk-forward test (D-023).
+
+### Found
+- Early warning, chosen model: walk-forward PR AUC 0.323 (0.27–0.38) against
+  0.20; risk bands missed 11.9% / 23.8% / 35.1% of the time in testing.
+
 ### Changed — risk bands set by share (D-022)
 - `band_shares` per target replaces the fixed `risk_bands` cut-offs: top 20%
   high, next 30% medium. Each run computes its score cut-offs from its
