@@ -76,8 +76,10 @@ def classifier(name: str, weighted: bool, y_train: pd.Series, random_state: int)
             C=0.3, class_weight="balanced" if weighted else None, max_iter=2000
         )
     if name == "random_forest":
+        # at least 20 rows per leaf: in the sensitivity check (D-023) larger
+        # leaves did a little better on both targets at every depth
         return RandomForestClassifier(
-            n_estimators=500, max_depth=4, min_samples_leaf=5, max_features="sqrt",
+            n_estimators=500, max_depth=4, min_samples_leaf=20, max_features="sqrt",
             class_weight="balanced_subsample" if weighted else None,
             random_state=random_state, n_jobs=-1,
         )
