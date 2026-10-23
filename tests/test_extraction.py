@@ -1,16 +1,24 @@
 """Extraction tests with made-up rows and a fake API client. No real Chama data
 is used and no API call is made."""
 import io
+import json
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from PIL import Image
 
+from chama import StepFailed
 from chama.extraction.checks import check_page, interest_parts, parse_amount
 from chama.extraction.evaluate import align, same_value, sample_photos, score_page
-from chama.extraction.extractor import ClaudeExtractor, ExtractionFailed
+from chama.extraction.extractor import (
+    ClaudeExtractor,
+    ExtractionFailed,
+    OpenAICompatibleExtractor,
+    make_extractor,
+)
 from chama.extraction.images import UnusableImage, prepare_image
-from chama.extraction.schema import PAGE_TABLES, LedgerPage, page_to_frames
+from chama.extraction.schema import PAGE_TABLES, LedgerPage, page_schema, page_to_frames
 from chama.ingestion.raw_format import SHEETS, expected_columns
 
 SETTINGS = {"model": "test-model", "effort": "medium", "max_tokens": 1000}
@@ -184,6 +192,80 @@ def test_extractor_sends_the_photo_and_returns_the_page():
 def test_extractor_explains_an_unusable_answer(stop_reason, parsed, message):
     with pytest.raises(ExtractionFailed, match=message):
         ClaudeExtractor(SETTINGS, fake_client(stop_reason, parsed)).extract(b"jpeg bytes")
+
+
+GROQ = {"base_url": "https://api.example.test/openai/v1", "api_key_env": "TEST_EXTRACTION_KEY",
+        "model": "open-model", "max_tokens": 3500, "request_options": {"reasoning_effort": "none"}}
+
+
+def openai_client(status=200, content=None, finish_reason="stop", headers=None, sent=None):
+    """An httpx client whose requests never leave the test: answers like an
+    OpenAI-style chat completions API."""
+    def handler(request):
+        if sent is not None:
+            sent.append(request)
+        if status != 200:
+            return httpx.Response(status, json={"error": {"message": "limit reached"}},
+                                  headers=headers or {})
+        return httpx.Response(200, json={
+            "model": "open-model",
+            "choices": [{"finish_reason": finish_reason, "message": {"content": content}}],
+            "usage": {"prompt_tokens": 4300, "completion_tokens": 1600},
+        })
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_openai_style_extractor_sends_the_photo_and_layout(monkeypatch):
+    monkeypatch.setenv("TEST_EXTRACTION_KEY", "secret")
+    sent = []
+    content = page([statement("A", "1,000", "", "", "1,000")]).model_dump_json()
+    extraction = OpenAICompatibleExtractor(GROQ, openai_client(content=content, sent=sent)).extract(b"jpeg")
+    request = sent[0]
+    body = json.loads(request.content)
+    assert str(request.url) == "https://api.example.test/openai/v1/chat/completions"
+    assert request.headers["authorization"] == "Bearer secret"
+    assert body["messages"][1]["content"][1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert body["response_format"]["json_schema"]["schema"] == page_schema()
+    assert body["reasoning_effort"] == "none" and body["max_tokens"] == 3500
+    assert extraction.page.statements[0].member_name == "A"
+    assert (extraction.input_tokens, extraction.output_tokens) == (4300, 1600)
+
+
+@pytest.mark.parametrize("client_args, message", [
+    ({"status": 401}, "TEST_EXTRACTION_KEY in .env"),
+    ({"status": 429, "headers": {"retry-after": "12"}}, "12 s"),
+    ({"status": 413}, "too large"),
+    ({"status": 503}, "unavailable"),
+    ({"content": '{"is_ledger_page": tru', "finish_reason": "length"}, "cut off"),
+    ({"content": "not json"}, "could not be read"),
+])
+def test_openai_style_extractor_explains_failures(monkeypatch, client_args, message):
+    monkeypatch.setenv("TEST_EXTRACTION_KEY", "secret")
+    with pytest.raises(ExtractionFailed, match=message):
+        OpenAICompatibleExtractor(GROQ, openai_client(**client_args)).extract(b"jpeg")
+
+
+def test_a_missing_key_is_named(monkeypatch):
+    monkeypatch.delenv("TEST_EXTRACTION_KEY", raising=False)
+    with pytest.raises(ExtractionFailed, match="TEST_EXTRACTION_KEY is missing"):
+        OpenAICompatibleExtractor(GROQ, openai_client()).extract(b"jpeg")
+
+
+def test_layout_schema_is_written_out_in_full_with_closed_objects():
+    schema = page_schema()
+    assert "$ref" not in json.dumps(schema) and "$defs" not in schema
+    row = schema["properties"]["statements"]["items"]
+    assert schema["additionalProperties"] is False and row["additionalProperties"] is False
+    assert set(row["required"]) == set(SHEETS["statements"][1]) | {"unclear"}
+
+
+def test_provider_is_chosen_from_the_settings():
+    settings = {"provider": "groq", "providers": {"groq": {"kind": "openai_compatible", **GROQ},
+                                                  "claude": {"kind": "claude", **SETTINGS}}}
+    assert isinstance(make_extractor(settings), OpenAICompatibleExtractor)
+    assert isinstance(make_extractor(settings, "claude"), ClaudeExtractor)
+    with pytest.raises(StepFailed, match="known: groq, claude"):
+        make_extractor(settings, "other")
 
 
 # --- evaluation -------------------------------------------------------------
