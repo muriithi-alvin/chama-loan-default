@@ -29,6 +29,7 @@ rejected. Newest last. Change a decision by adding a new one that replaces it.
 | D-022 | 2026-10-21 | Risk bands set by share of out-of-time scores |
 | D-023 | 2026-10-21 | The chosen model: random forest, no imbalance correction |
 | D-024 | 2026-10-23 | Ledger photos are read by a vision model through the Claude API, then reviewed |
+| D-025 | 2026-10-23 | Extraction runs on a free open-weight model (Qwen on Groq); Claude kept for comparison |
 
 ---
 
@@ -497,3 +498,35 @@ one class (`ClaudeExtractor`), so another can be compared in Sprint III.
 warning, so the review step and the measured accuracy are part of the
 design, not extras. Each page is one paid API call; `extract-eval` reports
 the time and cost per page.
+
+## D-025 Extraction runs on a free open-weight model; Claude kept for comparison
+**Context.** D-024 read the photos through the Claude API, which has no free
+tier. The project uses free and open-source tools where it can.
+**Decision.** The default extraction provider is the open-weight Qwen 3.8 27B
+model on Groq's free plan, through its OpenAI-style API
+(`extraction.providers.groq` in `config/pipeline.yaml`, key `GROQ_API_KEY`).
+Everything else in D-024 stands: the same layout, prompt, checks, review and
+measurement. The Claude API stays as a second provider:
+`extract-eval --provider claude` compares the two on the same pages, and any
+other service with an OpenAI-style API and image input can be added in the
+config.
+**Limits.** The free plan allows about 8,000 tokens a minute. A page is about
+4,300 tokens in (prompt 900, layout 1,300, photo 2,048) and 1,600 out, so it
+is read in one request, with the answer capped at 3,500 tokens and no
+thinking first: roughly one page a minute.
+**Data.** Replaces D-024's data paragraph: ledger photos, which show real
+names, leave this computer for the extraction provider. The officials gave
+their permission on 2026-10-23. Groq keeps no copy of requests by default;
+Zero Data Retention (Data Controls in its console) is turned on, so not even
+its short abuse-monitoring logs are kept. Photos are re-saved before sending,
+which drops EXIF data such as location. API keys stay in `.env` on the
+server. Extractions are saved in `data/interim/`, on this computer only.
+**Rejected.** Running an open-weight model on this laptop (7.4 GB of memory
+and no graphics card: minutes per page); free routes whose providers may log
+or train on prompts, which the names on the pages rule out; GitHub Models
+(reported closed in July 2026); Cloudflare Workers AI (a free daily
+allowance, but its documentation does not show image input through the
+OpenAI-style API).
+**Consequences.** A 27B open model may read this handwriting less accurately
+than Claude; `extract-eval` measures both, and the review step catches what
+either misses.
