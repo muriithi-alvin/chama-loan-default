@@ -51,10 +51,12 @@ chama-loan-default/
 - The modelling tables (codes and features, no names, no free text) go to
   Google Drive for Colab (decision D-016). The export stops if a name or an
   unlisted column appears.
-- Ledger photos, which show real names, are sent to the Claude API to be read
-  (decision D-024), with the officials' permission. Each photo is re-saved
-  before sending, which drops EXIF data such as location; the API key stays
-  in `.env`; the extracted rows are saved in `data/interim/` on this computer.
+- Ledger photos, which show real names, are sent to the extraction provider
+  to be read (decisions D-024, D-025), with the officials' permission: by default
+  Groq, which keeps no copy of requests (Zero Data Retention on). Each photo
+  is re-saved before sending, which drops EXIF data such as location; API
+  keys stay in `.env`; the extracted rows are saved in `data/interim/` on
+  this computer.
 - Data is used with the written permission of each Chama's officials.
 
 ## Setup (Windows, PowerShell)
@@ -213,12 +215,15 @@ python -m chama.pipeline all
 
 A vision model reads a ledger photo into the raw layout, the same columns and
 the same typing rules as the hand-typed Excel files ([data_dictionary.md](docs/data_dictionary.md)),
-so every later step reads its rows unchanged (decision D-024). Checks flag the
+so every later step reads its rows unchanged (decisions D-024, D-025). Checks flag the
 lines to look at, and a person reviews the rows before they are loaded.
 
-Set `ANTHROPIC_API_KEY` in `.env` first (create a key at
-https://platform.claude.com). Each page is one paid API call; the model and
-other settings are under `extraction` in `config/pipeline.yaml`.
+The default provider is the open-weight Qwen 3.8 27B model on Groq's free
+plan. Create a key at https://console.groq.com/keys, set `GROQ_API_KEY` in
+`.env`, and turn on Zero Data Retention under Data Controls in the Groq
+console. The free plan reads roughly one page a minute. The Claude API (paid,
+`ANTHROPIC_API_KEY`) is a second provider for comparison; providers and their
+settings are under `extraction` in `config/pipeline.yaml`.
 
 ```powershell
 # Read one or more photos: prints the rows and flags, saves them to data/interim/extractions/
@@ -228,10 +233,13 @@ python -m chama.pipeline extract data/photos/chama_b/chama_b_p120.jpg
 python -m chama.pipeline extract-eval
 # ...or on chosen pages; saved extractions are reused unless --refresh is given
 python -m chama.pipeline extract-eval --pages 12,48,120
+# Compare another provider on the same pages
+python -m chama.pipeline extract-eval --provider claude
 ```
 
 `extract-eval` reports the share of cells right (amounts and names
 separately), the statement lines found, how many lines with a wrong cell the
 checks flagged, and the time and cost per page. Per-page counts go to
-`data/processed/extraction_eval.csv`; every wrong cell, with names, goes to
-`data/interim/extraction_mismatches.csv` and stays on this computer.
+`data/processed/extraction_eval_<provider>.csv`; every wrong cell, with names,
+goes to `data/interim/extraction_mismatches_<provider>.csv` and stays on this
+computer.
