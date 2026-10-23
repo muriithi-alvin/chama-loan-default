@@ -1,8 +1,9 @@
 """The extract and extract-eval commands.
 
-Extractions are saved as JSON in data/interim/extractions/ (names included, so
-they stay on this computer like the rest of data/). extract-eval reuses a
-saved extraction unless told to refresh, so a page is paid for once.
+Extractions are saved as JSON in data/interim/extractions/<provider>/ (names
+included, so they stay on this computer like the rest of data/). extract-eval
+reuses a saved extraction unless told to refresh, so a page is read once per
+provider, and two providers can be compared on the same pages.
 """
 from __future__ import annotations
 
@@ -15,14 +16,14 @@ from chama import StepFailed
 from chama.config import PROJECT_ROOT, shown_path
 from chama.extraction.checks import check_page
 from chama.extraction.evaluate import sample_photos, score_page, summary_row
-from chama.extraction.extractor import ClaudeExtractor, Extraction
+from chama.extraction.extractor import Extraction, make_extractor, provider_settings
 from chama.extraction.images import UnusableImage, prepare_image
 from chama.extraction.schema import LedgerPage, page_to_frames
 
 EXTRACTIONS_DIR = PROJECT_ROOT / "data" / "interim" / "extractions"
 
 
-def read_photo(path: Path, settings: dict, extractor: ClaudeExtractor) -> Extraction:
+def read_photo(path: Path, settings: dict, extractor) -> Extraction:
     try:
         jpeg = prepare_image(path.read_bytes(), settings["max_image_edge_px"], settings["jpeg_quality"])
     except UnusableImage as e:
@@ -72,14 +73,15 @@ def print_page(photo: str, extraction: Extraction, prices: dict) -> None:
         print(f"  [{f.severity}] {f.table} row {f.row + 1}: {f.message}")
 
 
-def run_extract(paths: list[Path], config: dict) -> None:
+def run_extract(paths: list[Path], config: dict, provider: str | None) -> None:
     settings = config["extraction"]
-    extractor = ClaudeExtractor(settings)
+    name, options = provider_settings(settings, provider)
+    extractor = make_extractor(settings, name)
     for path in paths:
         extraction = read_photo(path, settings, extractor)
-        out = EXTRACTIONS_DIR / f"{path.stem}.json"
+        out = EXTRACTIONS_DIR / name / f"{path.stem}.json"
         save_extraction(extraction, out)
-        print_page(path.name, extraction, settings["price_per_mtok"])
+        print_page(path.name, extraction, options["price_per_mtok"])
         print(f"\nSaved to {shown_path(out)}")
 
 
@@ -93,8 +95,9 @@ def answer_key(chama: dict) -> dict[str, pd.DataFrame]:
 
 
 def run_evaluate(config: dict, chama_id: str, pages: list[int] | None, sample: int | None,
-                 refresh: bool) -> pd.DataFrame:
+                 refresh: bool, provider: str | None = None) -> pd.DataFrame:
     settings = config["extraction"]
+    name, options = provider_settings(settings, provider)
     chama = next((c for c in config["chamas"] if c["id"] == chama_id), None)
     if chama is None:
         raise StepFailed(f"No chama '{chama_id}' in config/pipeline.yaml.")
@@ -107,11 +110,11 @@ def run_evaluate(config: dict, chama_id: str, pages: list[int] | None, sample: i
     if not photos:
         raise StepFailed("None of those pages has typed rows to compare with.")
 
-    extractor = ClaudeExtractor(settings)
+    extractor = make_extractor(settings, name)
     photos_dir = PROJECT_ROOT / chama["photos_dir"]
     rows, mismatches = [], []
     for photo in photos:
-        cached = EXTRACTIONS_DIR / chama_id / f"{Path(photo).stem}.json"
+        cached = EXTRACTIONS_DIR / name / chama_id / f"{Path(photo).stem}.json"
         if cached.exists() and not refresh:
             extraction = load_extraction(cached)
         else:
@@ -123,7 +126,7 @@ def run_evaluate(config: dict, chama_id: str, pages: list[int] | None, sample: i
         rows.append(summary_row(score, {
             "seconds": extraction.seconds, "input_tokens": extraction.input_tokens,
             "output_tokens": extraction.output_tokens,
-            "cost_usd": round(cost(extraction, settings["price_per_mtok"]), 4),
+            "cost_usd": round(cost(extraction, options["price_per_mtok"]), 4),
             "is_ledger_page": extraction.page.is_ledger_page,
         }))
         mismatches += score.mismatches
@@ -131,10 +134,11 @@ def run_evaluate(config: dict, chama_id: str, pages: list[int] | None, sample: i
               f"{extraction.seconds}s")
 
     table = pd.DataFrame(rows).fillna(0)
+    print(f"\nProvider: {name} ({extraction.model})")
     print_summary(table)
-    out = PROJECT_ROOT / "data" / "processed" / "extraction_eval.csv"
+    out = PROJECT_ROOT / "data" / "processed" / f"extraction_eval_{name}.csv"
     table.to_csv(out, index=False)
-    detail = PROJECT_ROOT / "data" / "interim" / "extraction_mismatches.csv"
+    detail = PROJECT_ROOT / "data" / "interim" / f"extraction_mismatches_{name}.csv"
     pd.DataFrame(mismatches).to_csv(detail, index=False)
     print(f"\nPer-page results: {shown_path(out)}")
     print(f"Every wrong cell (names included, stays local): {shown_path(detail)}")
