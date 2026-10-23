@@ -28,6 +28,7 @@ rejected. Newest last. Change a decision by adding a new one that replaces it.
 | D-021 | 2026-10-20 | A second target: an early warning of missed repayments |
 | D-022 | 2026-10-21 | Risk bands set by share of out-of-time scores |
 | D-023 | 2026-10-21 | The chosen model: random forest, no imbalance correction |
+| D-024 | 2026-10-23 | Ledger photos are read by a vision model through the Claude API, then reviewed |
 
 ---
 
@@ -456,3 +457,43 @@ The loan-default model is carried forward so the pipeline is complete, but its
 category should not be presented as meaningful (D-022) until the default label
 is agreed with the Chama and there are more defaults. Every new training batch
 updates the chosen run and its cut-offs.
+
+## D-024 Ledger photos are read by a vision model, then reviewed
+**Context.** Sprint II asks for a working path from input to output: an
+official photographs a ledger page and the system takes it through to risk
+scores. Until now every page was typed into Excel by hand (M1). Open-source
+OCR (Tesseract, PaddleOCR) is built for print, not this handwriting, and
+cloud OCR (Google Cloud Vision, AWS Textract) returns words and positions,
+leaving the table and the typing rules to be rebuilt in code.
+**Decision.** A vision model reads each photo through the Claude API
+(`extraction` in `config/pipeline.yaml`) and returns the page as structured
+output in the raw layout: the same columns as the typed files, values exactly
+as written, following the typing rules of `docs/data_dictionary.md`
+(`src/chama/extraction/prompt.py`). Every later step reads its rows
+unchanged. Nothing it returns is trusted as it stands: checks flag the lines
+to look at (`checks.py`), and a person reviews the rows against the photo
+before they are loaded into `raw`. Extraction is measured against the typed
+Excel files, cell by cell (`python -m chama.pipeline extract-eval`).
+**Checks.** Each rule was tried on the 1,799 typed lines before it was
+adopted. Amounts that are not numbers and balances that grow by more than a
+month's interest almost never occur on correct lines, so they are flagged
+"check". Lines where before - repayment (+ interest) is not after are
+flagged only as a hint: 13% of correct lines do not add up in the ledger
+itself. A check of each balance against the last page's was dropped: it
+fired on 29% of correct lines, mostly where a loan was topped up between
+pages. On the typed pages taken as a perfect extraction, 3.1% of lines get a
+"check" flag, mostly lines marked unclear when they were typed.
+**Data.** This changes D-016's boundary: ledger photos, which show real
+names, now leave this computer for the Claude API. The officials gave their
+permission on 2026-10-23. Photos are re-saved before sending, which drops
+EXIF data such as location. The API key stays in `.env` on the server and
+never reaches a browser. Extractions are saved in `data/interim/`, on this
+computer only.
+**Rejected.** Tesseract and PaddleOCR (handwriting); Google Cloud Vision and
+Textract (positions only, rules rebuilt in code); open-weight vision models
+(need a GPU, too slow on this laptop for the web interface). The extractor is
+one class (`ClaudeExtractor`), so another can be compared in Sprint III.
+**Consequences.** A model can return a plausible but wrong number without
+warning, so the review step and the measured accuracy are part of the
+design, not extras. Each page is one paid API call; `extract-eval` reports
+the time and cost per page.
