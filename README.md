@@ -13,7 +13,7 @@ the final decision stays with the officials.
 | --- | --- | --- |
 | M1 | Data pipeline: ingest, anonymise, validate, clean | Done |
 | M2 | Features and models (Logistic Regression, Random Forest, XGBoost, SHAP), MLflow tracking, trained in Colab | Done |
-| M3 | MLOps: model registry, monitoring with Evidently, Docker | Next |
+| M3 | MLOps: ledger photo extraction, model serving, registry, monitoring with Evidently, Docker | In progress |
 | M4 | Dashboard for officials (Streamlit) | Planned |
 | M5 | Report and defence | Planned |
 
@@ -35,7 +35,8 @@ chama-loan-default/
 │   ├── anonymisation/ Steps 2-3: name matching, names -> member codes
 │   ├── cleaning/      Step 4: runs the dbt project in transform/
 │   ├── validation/    Data quality report
-│   └── features/      Indicators for modelling (M2)
+│   ├── features/      Indicators for modelling (M2)
+│   └── extraction/    Ledger photo -> raw rows with a vision model, checks (M3)
 ├── transform/         dbt project: staging -> analytics (clean tables, loans, checks)
 └── tests/             Automated tests (pytest)
 ```
@@ -47,9 +48,13 @@ chama-loan-default/
   HMAC-SHA256 and a secret key. Everything after the anonymisation step,
   including models and the dashboard, sees only codes.
 - The name-to-code link lives in the restricted `private` database schema.
-- Only the modelling table (`analytics.loan_features`: codes and features, no
-  names, no free text) leaves this computer, to Google Drive for Colab
-  (decision D-016). The export stops if a name or an unlisted column appears.
+- The modelling tables (codes and features, no names, no free text) go to
+  Google Drive for Colab (decision D-016). The export stops if a name or an
+  unlisted column appears.
+- Ledger photos, which show real names, are sent to the Claude API to be read
+  (decision D-024), with the officials' permission. Each photo is re-saved
+  before sending, which drops EXIF data such as location; the API key stays
+  in `.env`; the extracted rows are saved in `data/interim/` on this computer.
 - Data is used with the written permission of each Chama's officials.
 
 ## Setup (Windows, PowerShell)
@@ -59,8 +64,8 @@ chama-loan-default/
 conda create -n chama python=3.11 -y
 conda activate chama
 
-# 2. Install the project, dev tools and modelling libraries
-pip install -e ".[dev,ml]"
+# 2. Install the project, dev tools, modelling and extraction libraries
+pip install -e ".[dev,ml,extraction]"
 
 # 3. Create your .env from the example and fill it in
 Copy-Item .env.example .env
@@ -203,3 +208,30 @@ docker compose down -v
 docker compose up -d
 python -m chama.pipeline all
 ```
+
+## Reading ledger photos (Milestone 3)
+
+A vision model reads a ledger photo into the raw layout, the same columns and
+the same typing rules as the hand-typed Excel files ([data_dictionary.md](docs/data_dictionary.md)),
+so every later step reads its rows unchanged (decision D-024). Checks flag the
+lines to look at, and a person reviews the rows before they are loaded.
+
+Set `ANTHROPIC_API_KEY` in `.env` first (create a key at
+https://platform.claude.com). Each page is one paid API call; the model and
+other settings are under `extraction` in `config/pipeline.yaml`.
+
+```powershell
+# Read one or more photos: prints the rows and flags, saves them to data/interim/extractions/
+python -m chama.pipeline extract data/photos/chama_b/chama_b_p120.jpg
+
+# Measure extraction against the typed Excel files, on 10 pages spread through the ledger
+python -m chama.pipeline extract-eval
+# ...or on chosen pages; saved extractions are reused unless --refresh is given
+python -m chama.pipeline extract-eval --pages 12,48,120
+```
+
+`extract-eval` reports the share of cells right (amounts and names
+separately), the statement lines found, how many lines with a wrong cell the
+checks flagged, and the time and cost per page. Per-page counts go to
+`data/processed/extraction_eval.csv`; every wrong cell, with names, goes to
+`data/interim/extraction_mismatches.csv` and stays on this computer.
