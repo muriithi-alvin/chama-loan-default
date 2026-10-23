@@ -50,6 +50,29 @@ class LedgerPage(BaseModel):
     new_loans: list[NewLoanRow] = Field(description="One row per loan listed as given at this meeting")
 
 
+def page_schema() -> dict:
+    """LedgerPage's JSON schema written out in full, for APIs that do not follow
+    $ref: each definition is copied in place, titles are dropped (fewer tokens)
+    and every object is closed to extra keys."""
+    schema = LedgerPage.model_json_schema()
+    definitions = schema.pop("$defs", {})
+
+    def inline(node):
+        if isinstance(node, list):
+            return [inline(item) for item in node]
+        if not isinstance(node, dict):
+            return node
+        if "$ref" in node:
+            target = definitions[node["$ref"].split("/")[-1]]
+            node = {**target, **{k: v for k, v in node.items() if k != "$ref"}}
+        out = {k: inline(v) for k, v in node.items() if k != "title"}
+        if out.get("type") == "object":
+            out["additionalProperties"] = False
+        return out
+
+    return inline(schema)
+
+
 def page_to_frames(page: LedgerPage, source_photo: str) -> dict[str, pd.DataFrame]:
     """The page as raw-layout tables: blank cells become None, `unclear` 'Y' or None,
     and every row carries the photo it was read from."""
