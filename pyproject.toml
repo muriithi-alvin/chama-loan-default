@@ -23,8 +23,8 @@ ml = [
     "scikit-learn>=1.5", "imbalanced-learn>=0.12", "xgboost>=2.1", "shap>=0.46",
     "mlflow>=3.0", "matplotlib>=3.8",
 ]
-# Milestone 3 - ledger photo extraction with the Claude API (D-024)
-extraction = ["anthropic>=2.2", "pillow>=10"]
+# Milestone 3 - ledger photo extraction: Groq (OpenAI-style API) or the Claude API (D-024, D-025)
+extraction = ["httpx>=0.27", "anthropic>=2.2", "pillow>=10"]
 
 [build-system]
 requires = ["setuptools>=68"]
