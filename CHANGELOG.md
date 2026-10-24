@@ -4,7 +4,59 @@ All notable changes to this project are recorded here, newest first.
 Each entry links to its issue or pull request where one exists.
 Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
-## M3 — branch `m3-mlops`
+## M4 — branch `m4-web-interface`
+
+### Added — Kibaba, the web interface (D-026, D-027, D-028)
+
+- **Pages** (`frontend/`, Next.js 16, TypeScript, Tailwind CSS 4, Motion), in
+  the Shanga beadwork style: sign-in with the bead collar; for officials the
+  Overview (bead strands per band that move when scores change, members to
+  follow up, chama health, a "new scores" banner checked every 60 s), the
+  Members list (sort, filter by band and search, kept in the address), the
+  Member page (band, what it meant in testing, top 3 reasons, where the score
+  comes from, loans, repayments, contributions), About the scores (a scroll
+  story of how members are put in bands), Records (meetings list and meeting
+  page beside its photo), Scan a page, Scan status, Review and correct, the
+  Pipeline run timeline, Upload history and the Edit record; for members My
+  summary. Loading, empty, error and "not allowed" states; a web app manifest
+  so officials can add it to a phone's home screen. A short key to the bands
+  (what each meant in testing, with a link to About the scores) wherever bands
+  appear. No "demo" wording on any page; the demo chama's fictional names are
+  explained in the report (D-028).
+- **API** (`src/chama/web/`, FastAPI): sign-in through Supabase Auth exchanged
+  for the server's own HttpOnly session cookie and CSRF token; one role check
+  per route that takes the chama and member from the account, never the
+  address; error messages with a reference that also appears in the log; a
+  request log and `web-stats` for page times; `/api/health`.
+- **Worker** (`python -m chama.web.worker`): jobs from `app.jobs` with
+  `FOR UPDATE SKIP LOCKED`; reads scanned photos with the extraction provider
+  (retrying rate limits up to 3 times), and after Accept runs ingest, names,
+  anonymise, checks and score, one run at a time.
+- **Tables** (`sql/02_app.sql`): accounts, sessions, uploads, jobs, drafts,
+  flags, name matches, the insert-only edit record (a trigger refuses changes
+  and deletes), pipeline runs and steps, risk scores and the worker heartbeat.
+  Constraints stop a second upload of the same photo or form, a second job of
+  a kind and a second run per upload.
+- **Commands**: `score` (bands and plain-word reasons for each chama's latest
+  meeting, saved with the meeting, model run and time), `demo-chama` (chama B
+  with fictional names, D-028), `web-user add | list | deactivate | codes`,
+  `web-stats`.
+- **Docs**: `docs/web_setup.md` (Supabase, the demo chama, accounts, running
+  it) and the master prompt as `docs/m4_master_prompt.md`.
+- **Tests**: reason sentences for every model feature, fictional names,
+  sign-in, sessions, CSRF and every role against the routes, scan rules, and
+  database rules on a separate `chama_test` database (skipped without Docker).
+
+### Changed
+
+- `excel_loader.raw_files` also reads accepted scans,
+  `data/raw/<chama>/scans/scan-<upload>.xlsx`, so a reload keeps them (S-3).
+- `export` leaves demo chamas out of the modelling tables.
+- `ExtractionFailed` says whether trying again may work (rate limit, outage).
+- `pyproject.toml` gains a `web` extra; `.env.example` the web settings;
+  `config/pipeline.yaml` chama names and `chama_demo`.
+
+## M3 — branch `m3-mlops` (merged)
 
 ### Changed — free open-weight extraction provider (D-025)
 - Extraction runs by default on the open-weight Qwen 3.8 27B model on Groq's

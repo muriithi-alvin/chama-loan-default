@@ -14,7 +14,7 @@ the final decision stays with the officials.
 | M1 | Data pipeline: ingest, anonymise, validate, clean | Done |
 | M2 | Features and models (Logistic Regression, Random Forest, XGBoost, SHAP), MLflow tracking, trained in Colab | Done |
 | M3 | MLOps: ledger photo extraction, model serving, registry, monitoring with Evidently, Docker | In progress |
-| M4 | Dashboard for officials (Streamlit) | Planned |
+| M4 | Web interface for officials and members: sign-in and roles, records, scan a ledger page, early-warning bands with reasons (D-026 to D-028) | In progress |
 | M5 | Report and defence | Planned |
 
 ## Folder structure
@@ -36,7 +36,9 @@ chama-loan-default/
 │   ├── cleaning/      Step 4: runs the dbt project in transform/
 │   ├── validation/    Data quality report
 │   ├── features/      Indicators for modelling (M2)
-│   └── extraction/    Ledger photo -> raw rows with a vision model, checks (M3)
+│   ├── extraction/    Ledger photo -> raw rows with a vision model, checks (M3)
+│   └── web/           The web interface's API, scoring and job worker (M4)
+├── frontend/          The web interface's pages (Next.js, TypeScript, Tailwind) (M4)
 ├── transform/         dbt project: staging -> analytics (clean tables, loans, checks)
 └── tests/             Automated tests (pytest)
 ```
@@ -57,6 +59,12 @@ chama-loan-default/
   is re-saved before sending, which drops EXIF data such as location; API
   keys stay in `.env`; the extracted rows are saved in `data/interim/` on
   this computer.
+- The web interface (M4) shows names only to the chama's own officials and
+  each member's own name to that member; members never see scores, other
+  members or ledger photos. Sessions are HttpOnly cookies with CSRF tokens;
+  photos are kept outside the web folders; logs hold codes, never names.
+  With `DEMO_MODE=true`, every page shows fictional names and no real ledger
+  photo, for projectors (D-027, D-028).
 - Data is used with the written permission of each Chama's officials.
 
 ## Setup (Windows, PowerShell)
@@ -66,8 +74,8 @@ chama-loan-default/
 conda create -n chama python=3.11 -y
 conda activate chama
 
-# 2. Install the project, dev tools, modelling and extraction libraries
-pip install -e ".[dev,ml,extraction]"
+# 2. Install the project, dev tools, modelling, extraction and web libraries
+pip install -e ".[dev,ml,extraction,web]"
 
 # 3. Create your .env from the example and fill it in
 Copy-Item .env.example .env
@@ -96,6 +104,8 @@ Each raw file has four sheets that mirror the ledger: **Statements**, **Meetings
 
 - [docs/milestone_1_report.md](docs/milestone_1_report.md) — Milestone 1: what was built, decisions, stack and all commands
 - [docs/milestone_2_report.md](docs/milestone_2_report.md) — Milestone 2: targets, features, models, tests, results, the chosen model and all commands
+- [docs/web_setup.md](docs/web_setup.md) — Milestone 4: setting up sign-in, the demo chama, accounts, and running Kibaba, the web interface
+- [docs/m4_master_prompt.md](docs/m4_master_prompt.md) — Milestone 4: the pages, roles and rules the web interface is built to
 - [CHANGELOG.md](CHANGELOG.md) — every change, newest first
 - [docs/decisions.md](docs/decisions.md) — design decisions and why
 - [docs/git_workflow.md](docs/git_workflow.md) — branches and how to push and merge
@@ -243,3 +253,20 @@ checks flagged, and the time and cost per page. Per-page counts go to
 `data/processed/extraction_eval_<provider>.csv`; every wrong cell, with names,
 goes to `data/interim/extraction_mismatches_<provider>.csv` and stays on this
 computer.
+
+## Running the web interface, Kibaba (Milestone 4)
+
+Officials see which members to follow up and why, browse the records and
+scan a ledger page; members see their own loans and contributions (D-026).
+The pages are a Next.js app in `frontend/`; the rules and data sit in a
+FastAPI API and a job worker in `src/chama/web/` (D-027). Sign-in uses
+Supabase Auth. Full setup, including the demo chama and accounts, is in
+[docs/web_setup.md](docs/web_setup.md).
+
+```powershell
+docker compose up -d                          # the database
+python -m chama.pipeline score                # bands and reasons for the pages
+uvicorn chama.web.app:app --port 8000         # the API
+python -m chama.web.worker                    # the worker, in a second terminal
+cd frontend; npm install; npm run dev         # the pages, in a third: http://localhost:3000
+```
