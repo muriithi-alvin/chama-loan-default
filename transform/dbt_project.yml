@@ -29,3 +29,7 @@ vars:
 models:
   chama:
     +materialized: table
+    # Each new table gets its row statistics at once, so PostgreSQL plans the
+    # models built on it well. Without them, member_months could take minutes
+    # instead of seconds when the database had not yet analysed its inputs.
+    +post-hook: "analyze {{ this }}"

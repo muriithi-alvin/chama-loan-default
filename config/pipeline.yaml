@@ -1,13 +1,23 @@
 # Pipeline settings. Paths are relative to the project root.
 # Each Chama has a folder of yearly Excel files (e.g. data/raw/chama_b/2014.xlsx).
 # The loader reads every .xlsx in the folder and combines them.
+# `name` is shown on the web pages. A chama with `demo: true` is a copy with
+# fictional names for demonstrations (D-028): built by `demo-chama`, shown
+# with its own names, and never exported for training.
 chamas:
   - id: chama_a          # the first Chama (records from 2023; no data yet, D-014)
+    name: Chama A
     raw_dir: data/raw/chama_a
     photos_dir: data/photos/chama_a
   - id: chama_b          # the second Chama (records from 2014)
+    name: Chama B
     raw_dir: data/raw/chama_b
     photos_dir: data/photos/chama_b
+  - id: chama_demo       # chama B's typed pages with fictional names, for the review
+    name: Tumaini Women's Group
+    demo: true
+    raw_dir: data/raw/chama_demo
+    photos_dir: data/photos/chama_demo
 
 # Sheet and column layout lives in src/chama/ingestion/raw_format.py
 

@@ -25,7 +25,15 @@ from chama.extraction.schema import LedgerPage, page_schema
 
 
 class ExtractionFailed(StepFailed):
-    """The model gave no usable answer; the message says why and what to do."""
+    """The model gave no usable answer; the message says why and what to do.
+
+    `transient` is true for a rate limit, a timeout or the service being down:
+    trying again later may work (the web worker retries these).
+    """
+
+    def __init__(self, message: str, transient: bool = False):
+        super().__init__(message)
+        self.transient = transient
 
 
 @dataclass
@@ -94,10 +102,12 @@ class OpenAICompatibleExtractor:
                                         headers={"Authorization": f"Bearer {key}"})
         except httpx.RequestError as e:
             raise ExtractionFailed(
-                "Could not reach the extraction service. Check the internet connection."
+                "Could not reach the extraction service. Check the internet connection.",
+                transient=True,
             ) from e
         if response.status_code != 200:
-            raise ExtractionFailed(_http_problem(response, self.api_key_env))
+            raise ExtractionFailed(_http_problem(response, self.api_key_env),
+                                   transient=response.status_code == 429 or response.status_code >= 500)
 
         data = response.json()
         choice = data["choices"][0]
@@ -176,13 +186,16 @@ class ClaudeExtractor:
         except anthropic.AuthenticationError as e:
             raise ExtractionFailed("The Anthropic API key was rejected: check ANTHROPIC_API_KEY in .env.") from e
         except anthropic.RateLimitError as e:
-            raise ExtractionFailed("The extraction service is busy (rate limit). Try again in a minute.") from e
+            raise ExtractionFailed("The extraction service is busy (rate limit). Try again in a minute.",
+                                   transient=True) from e
         except anthropic.APIStatusError as e:
             if e.status_code >= 500:
-                raise ExtractionFailed("The extraction service is unavailable. Try again shortly.") from e
+                raise ExtractionFailed("The extraction service is unavailable. Try again shortly.",
+                                       transient=True) from e
             raise ExtractionFailed(f"The extraction request was refused: {e.message}") from e
         except anthropic.APIConnectionError as e:
-            raise ExtractionFailed("Could not reach the extraction service. Check the internet connection.") from e
+            raise ExtractionFailed("Could not reach the extraction service. Check the internet connection.",
+                                   transient=True) from e
         except (pydantic.ValidationError, ValueError) as e:
             raise ExtractionFailed(UNREADABLE) from e
 
