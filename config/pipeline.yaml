@@ -4,8 +4,10 @@
 chamas:
   - id: chama_a          # the first Chama (records from 2023; no data yet, D-014)
     raw_dir: data/raw/chama_a
+    photos_dir: data/photos/chama_a
   - id: chama_b          # the second Chama (records from 2014)
     raw_dir: data/raw/chama_b
+    photos_dir: data/photos/chama_b
 
 # Sheet and column layout lives in src/chama/ingestion/raw_format.py
 
@@ -70,3 +72,37 @@ modelling:
       # The model carried forward (D-023): tied best walk-forward PR AUC with
       # the simplest set-up; bands of 12% / 24% / 35% missed in testing.
       chosen: {model: random_forest, imbalance: none}
+
+# Milestone 3 - ledger photo extraction (src/chama/extraction, D-024, D-025).
+# A photo is sent to a vision model and the rows come back exactly as written,
+# in the raw layout; checks flag lines to look at and a person reviews them.
+extraction:
+  provider: groq             # which entry under providers reads the photos
+  # Photos are shrunk to this long side before sending. The WhatsApp photos
+  # are 1600 x 1200 and go as they are.
+  max_image_edge_px: 2576
+  jpeg_quality: 85
+  eval_sample: 10            # pages in the extract-eval sample, spread through the ledger
+  providers:
+    # Free plan, open-weight model: Qwen 3.8 27B on Groq (key: GROQ_API_KEY).
+    # Groq keeps no copy of requests by default; also turn on Zero Data
+    # Retention under Data Controls in the Groq console.
+    groq:
+      kind: openai_compatible
+      base_url: https://api.groq.com/openai/v1
+      api_key_env: GROQ_API_KEY
+      model: qwen/qwen3.8-27b
+      # The plan allows about 8,000 tokens a minute, question and answer
+      # together. The question is about 4,300 (prompt 900, layout 1,300,
+      # photo 2,048) and a 17-line page's answer about 1,600, so the answer is
+      # capped at 3,500 and the model answers without thinking first.
+      max_tokens: 3500
+      request_options: {reasoning_effort: none, reasoning_format: hidden}
+      price_per_mtok: {input: 0, output: 0}        # free plan (paid plan: 0.80 / 4.00)
+    # Paid, for comparison: the Claude API (key: ANTHROPIC_API_KEY).
+    claude:
+      kind: claude
+      model: claude-opus-5-5
+      effort: medium         # low | medium | high: higher reads more carefully, but slower
+      max_tokens: 16000      # room for the answer and the model's thinking
+      price_per_mtok: {input: 4.00, output: 20.00}  # list price, US$ per million tokens

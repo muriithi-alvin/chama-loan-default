@@ -4,6 +4,55 @@ All notable changes to this project are recorded here, newest first.
 Each entry links to its issue or pull request where one exists.
 Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
+## M3 — branch `m3-mlops`
+
+### Changed — free open-weight extraction provider (D-025)
+- Extraction runs by default on the open-weight Qwen 3.8 27B model on Groq's
+  free plan; the Claude API (paid) is kept as a second provider for
+  comparison.
+- `extractor.py`: `OpenAICompatibleExtractor` (Groq, or any OpenAI-style API
+  with image input) beside `ClaudeExtractor`, chosen by `make_extractor` from
+  `extraction.provider`; clear messages for a missing key, rate limit and a
+  request too large for the plan.
+- `schema.py`: `page_schema` writes the layout out in full for APIs that do
+  not follow JSON Schema references.
+- `extract` and `extract-eval` take `--provider`; saved extractions and the
+  evaluation files are kept per provider, so two providers can be compared on
+  the same pages.
+- `config/pipeline.yaml`: `extraction.providers` (groq, claude);
+  `pyproject.toml`: `httpx` in the `extraction` extra; `.env.example`:
+  `GROQ_API_KEY`.
+- Tests for the new extractor with a fake HTTP transport (no request leaves
+  the test), the full layout schema and the provider choice.
+
+### Added — ledger photo extraction (D-024)
+- `src/chama/extraction/`: a vision model reads a ledger photo into the raw
+  layout through the Claude API, values exactly as written.
+  - `schema.py`: the structured output, built from `raw_format.py` so the
+    rows have the typed files' columns; `page_to_frames` turns a page into
+    raw-layout tables.
+  - `prompt.py`: the typing rules of `docs/data_dictionary.md`, for the model.
+  - `images.py`: checks that an upload really is an image, turns it upright,
+    shrinks it to the model's largest useful size and drops EXIF data.
+  - `extractor.py`: `ClaudeExtractor`, with a clear message for each failure
+    (key rejected, rate limit, service down, answer cut off, refusal), and a
+    server-side fallback model if the first declines.
+  - `checks.py`: flags lines to look at (hard to read, not an amount, balance
+    jump, does not add up), each rule tried on the typed lines first.
+  - `evaluate.py`, `run.py`: line the extracted rows up with the typed rows
+    of the same photo and score them cell by cell.
+- Commands: `extract <photos>` and `extract-eval [--pages] [--sample] [--refresh]`.
+- `extraction` settings and each Chama's `photos_dir` in `config/pipeline.yaml`;
+  the `extraction` extra in `pyproject.toml` (`anthropic`, `pillow`);
+  `ANTHROPIC_API_KEY` in `.env.example`.
+- Tests in `tests/test_extraction.py` (made-up rows, a fake API client).
+- README: data protection, setup and a section on reading ledger photos.
+
+### Found
+- On the 1,799 typed lines: 13% do not add up in the ledger itself and 29%
+  differ from the last page's balance, so those checks are a hint or dropped;
+  a perfect extraction gets a "check" flag on 3.1% of lines (D-024).
+
 ## M2 — branch `m2-features-models` (merged)
 
 ### Added — Milestone 2 report

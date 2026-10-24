@@ -10,6 +10,8 @@ Usage:
     python -m chama.pipeline dbt <args>        #    any dbt command, e.g. "dbt test"
     python -m chama.pipeline export            # 5. modelling tables (codes only) -> Google Drive
     python -m chama.pipeline train             # 6. train, test and log the models (MLflow)
+    python -m chama.pipeline extract <photos>  #    ledger photos -> rows, with a vision model
+    python -m chama.pipeline extract-eval      #    extraction measured against the typed pages
 
 Add --help after any step for details.
 """
@@ -230,6 +232,52 @@ def train(targets: tuple[str, ...], data_dir: Path | None, models: tuple[str, ..
         print(f'  mlflow ui --backend-store-uri "{mlflow_dir().resolve().as_uri()}"')
 
     _run(go)
+
+
+@cli.command()
+@click.argument("photos", nargs=-1, required=True,
+                type=click.Path(exists=True, dir_okay=False, path_type=Path))
+@click.option("--provider", help="Extraction provider from config/pipeline.yaml, e.g. groq or "
+                                 "claude. Default: extraction.provider.")
+def extract(photos: tuple[Path, ...], provider: str | None) -> None:
+    """Read ledger photos into the raw layout with a vision model.
+
+    Each photo is sent to the extraction provider (D-024, D-025): by default
+    the open-weight Qwen model on Groq's free plan (GROQ_API_KEY in .env). The
+    rows come back exactly as written, with flags on the lines to check.
+    Prints the rows and saves them to data/interim/extractions/<provider>/
+    (this computer only).
+    """
+    from chama.extraction.run import run_extract
+
+    _run(lambda: run_extract(list(photos), load_config(), provider))
+
+
+@cli.command("extract-eval")
+@click.option("--chama", "chama_id", default="chama_b", show_default=True)
+@click.option("--pages", help="Page numbers to test, e.g. 12,48,120. Default: a sample spread "
+                              "through the ledger.")
+@click.option("--sample", type=int, help="How many pages in the sample (default: extraction.eval_sample).")
+@click.option("--refresh", is_flag=True, help="Read the pages again instead of reusing saved "
+                                              "extractions.")
+@click.option("--provider", help="Extraction provider from config/pipeline.yaml, e.g. groq or "
+                                 "claude. Default: extraction.provider.")
+def extract_eval(chama_id: str, pages: str | None, sample: int | None, refresh: bool,
+                 provider: str | None) -> None:
+    """Measure extraction against the hand-typed Excel files, cell by cell.
+
+    Reads each page with the extraction model (or reuses its saved extraction),
+    lines its rows up with the typed rows of the same photo and reports the
+    share of cells right, lines found, how many wrong lines the checks flagged,
+    time and cost per page. Run it once per provider to compare them on the
+    same pages. Writes data/processed/extraction_eval_<provider>.csv (counts
+    only) and data/interim/extraction_mismatches_<provider>.csv (every wrong
+    cell).
+    """
+    from chama.extraction.run import run_evaluate
+
+    page_numbers = [int(p) for p in pages.split(",")] if pages else None
+    _run(lambda: run_evaluate(load_config(), chama_id, page_numbers, sample, refresh, provider))
 
 
 if __name__ == "__main__":

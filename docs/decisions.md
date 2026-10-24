@@ -28,6 +28,8 @@ rejected. Newest last. Change a decision by adding a new one that replaces it.
 | D-021 | 2026-10-20 | A second target: an early warning of missed repayments |
 | D-022 | 2026-10-21 | Risk bands set by share of out-of-time scores |
 | D-023 | 2026-10-21 | The chosen model: random forest, no imbalance correction |
+| D-024 | 2026-10-23 | Ledger photos are read by a vision model through the Claude API, then reviewed |
+| D-025 | 2026-10-23 | Extraction runs on a free open-weight model (Qwen on Groq); Claude kept for comparison |
 
 ---
 
@@ -456,3 +458,75 @@ The loan-default model is carried forward so the pipeline is complete, but its
 category should not be presented as meaningful (D-022) until the default label
 is agreed with the Chama and there are more defaults. Every new training batch
 updates the chosen run and its cut-offs.
+
+## D-024 Ledger photos are read by a vision model, then reviewed
+**Context.** Sprint II asks for a working path from input to output: an
+official photographs a ledger page and the system takes it through to risk
+scores. Until now every page was typed into Excel by hand (M1). Open-source
+OCR (Tesseract, PaddleOCR) is built for print, not this handwriting, and
+cloud OCR (Google Cloud Vision, AWS Textract) returns words and positions,
+leaving the table and the typing rules to be rebuilt in code.
+**Decision.** A vision model reads each photo through the Claude API
+(`extraction` in `config/pipeline.yaml`) and returns the page as structured
+output in the raw layout: the same columns as the typed files, values exactly
+as written, following the typing rules of `docs/data_dictionary.md`
+(`src/chama/extraction/prompt.py`). Every later step reads its rows
+unchanged. Nothing it returns is trusted as it stands: checks flag the lines
+to look at (`checks.py`), and a person reviews the rows against the photo
+before they are loaded into `raw`. Extraction is measured against the typed
+Excel files, cell by cell (`python -m chama.pipeline extract-eval`).
+**Checks.** Each rule was tried on the 1,799 typed lines before it was
+adopted. Amounts that are not numbers and balances that grow by more than a
+month's interest almost never occur on correct lines, so they are flagged
+"check". Lines where before - repayment (+ interest) is not after are
+flagged only as a hint: 13% of correct lines do not add up in the ledger
+itself. A check of each balance against the last page's was dropped: it
+fired on 29% of correct lines, mostly where a loan was topped up between
+pages. On the typed pages taken as a perfect extraction, 3.1% of lines get a
+"check" flag, mostly lines marked unclear when they were typed.
+**Data.** This changes D-016's boundary: ledger photos, which show real
+names, now leave this computer for the Claude API. The officials gave their
+permission on 2026-10-23. Photos are re-saved before sending, which drops
+EXIF data such as location. The API key stays in `.env` on the server and
+never reaches a browser. Extractions are saved in `data/interim/`, on this
+computer only.
+**Rejected.** Tesseract and PaddleOCR (handwriting); Google Cloud Vision and
+Textract (positions only, rules rebuilt in code); open-weight vision models
+(need a GPU, too slow on this laptop for the web interface). The extractor is
+one class (`ClaudeExtractor`), so another can be compared in Sprint III.
+**Consequences.** A model can return a plausible but wrong number without
+warning, so the review step and the measured accuracy are part of the
+design, not extras. Each page is one paid API call; `extract-eval` reports
+the time and cost per page.
+
+## D-025 Extraction runs on a free open-weight model; Claude kept for comparison
+**Context.** D-024 read the photos through the Claude API, which has no free
+tier. The project uses free and open-source tools where it can.
+**Decision.** The default extraction provider is the open-weight Qwen 3.8 27B
+model on Groq's free plan, through its OpenAI-style API
+(`extraction.providers.groq` in `config/pipeline.yaml`, key `GROQ_API_KEY`).
+Everything else in D-024 stands: the same layout, prompt, checks, review and
+measurement. The Claude API stays as a second provider:
+`extract-eval --provider claude` compares the two on the same pages, and any
+other service with an OpenAI-style API and image input can be added in the
+config.
+**Limits.** The free plan allows about 8,000 tokens a minute. A page is about
+4,300 tokens in (prompt 900, layout 1,300, photo 2,048) and 1,600 out, so it
+is read in one request, with the answer capped at 3,500 tokens and no
+thinking first: roughly one page a minute.
+**Data.** Replaces D-024's data paragraph: ledger photos, which show real
+names, leave this computer for the extraction provider. The officials gave
+their permission on 2026-10-23. Groq keeps no copy of requests by default;
+Zero Data Retention (Data Controls in its console) is turned on, so not even
+its short abuse-monitoring logs are kept. Photos are re-saved before sending,
+which drops EXIF data such as location. API keys stay in `.env` on the
+server. Extractions are saved in `data/interim/`, on this computer only.
+**Rejected.** Running an open-weight model on this laptop (7.4 GB of memory
+and no graphics card: minutes per page); free routes whose providers may log
+or train on prompts, which the names on the pages rule out; GitHub Models
+(reported closed in July 2026); Cloudflare Workers AI (a free daily
+allowance, but its documentation does not show image input through the
+OpenAI-style API).
+**Consequences.** A 27B open model may read this handwriting less accurately
+than Claude; `extract-eval` measures both, and the review step catches what
+either misses.
