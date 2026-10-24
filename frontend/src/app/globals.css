@@ -1,0 +1,275 @@
+@import "tailwindcss";
+
+/* "Shanga": Kenyan beadwork colours on white (master prompt, section 7).
+   Only these colours exist; Tailwind's default palette is switched off. */
+@theme {
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-paper: #ffffff;
+  --color-ink: #14213d;
+  --color-ink-soft: #2a3a63;
+  --color-muted: #4a5470;
+  --color-subtle: #3b4664;
+  --color-line: #e3e8f2;
+  --color-field: #c7cfe0;
+  --color-ice: #eef3ff;
+  --color-ice-line: #d6e0fa;
+  --color-cream: #fff4d6;
+  --color-cream-line: #f0dfae;
+  --color-cobalt: #2547a8;
+  --color-cobalt-dark: #1b3580;
+  --color-cobalt-light: #dce5ff;
+  --color-red: #d62839;
+  --color-sun: #f6c343;
+  --color-leaf: #187a42;
+  --color-orange: #f07f1a;
+  --color-side-text: #d7dded;
+  --color-side-muted: #b9c3dd;
+  --color-side-line: #5d6e99;
+
+  /* band chips: text on chip, each pair at least 6:1 */
+  --color-low: #135c30;
+  --color-low-bg: #e1f2e7;
+  --color-medium: #7a5200;
+  --color-medium-bg: #fff1c7;
+  --color-high: #9e1b2a;
+  --color-high-bg: #fce4e6;
+
+  --font-sans: var(--font-body), "Atkinson Hyperlegible Next", system-ui, sans-serif;
+  --font-display: var(--font-title), "Gabarito", system-ui, sans-serif;
+
+  --radius-card: 20px;
+  --radius-button: 12px;
+
+  --ease-spring: cubic-bezier(0.2, 1.4, 0.35, 1);
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: auto;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 17px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+  }
+  a {
+    color: var(--color-cobalt);
+  }
+  a:hover {
+    color: var(--color-cobalt-dark);
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-ink);
+    outline-offset: 3px;
+  }
+  .on-dark :focus-visible {
+    outline-color: var(--color-sun);
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+/* ---- Beads: glass beads drawn with two radial gradients ---------------- */
+.bead {
+  display: block;
+  flex: none;
+  border-radius: 9999px;
+  width: 10px;
+  height: 10px;
+}
+.bead-red {
+  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.85) 0 13%, rgba(255, 255, 255, 0) 34%),
+    radial-gradient(circle at 50% 58%, #ee4654 0 38%, #a11b29 100%);
+}
+.bead-ink {
+  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.7) 0 13%, rgba(255, 255, 255, 0) 34%),
+    radial-gradient(circle at 50% 58%, #3a4a75 0 38%, #0b1428 100%);
+}
+.bead-cobalt {
+  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.85) 0 13%, rgba(255, 255, 255, 0) 34%),
+    radial-gradient(circle at 50% 58%, #4470db 0 38%, #18317a 100%);
+}
+.bead-orange {
+  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.85) 0 13%, rgba(255, 255, 255, 0) 34%),
+    radial-gradient(circle at 50% 58%, #ff9e45 0 38%, #c25a08 100%);
+}
+.bead-leaf {
+  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.85) 0 13%, rgba(255, 255, 255, 0) 34%),
+    radial-gradient(circle at 50% 58%, #2ea05d 0 38%, #0e552c 100%);
+}
+.bead-sun {
+  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.9) 0 13%, rgba(255, 255, 255, 0) 34%),
+    radial-gradient(circle at 50% 58%, #ffd95e 0 38%, #d19a12 100%);
+}
+.bead-white {
+  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 1) 0 14%, rgba(255, 255, 255, 0) 34%),
+    radial-gradient(circle at 50% 58%, #ffffff 0 40%, #c9cfdc 100%);
+  box-shadow: 0 0 0 1px #c9cfdc;
+}
+.bead-empty {
+  background: transparent;
+  box-sizing: border-box;
+  border: 2px solid var(--color-side-line);
+}
+
+/* A short row of beads under each page title */
+.bead-row {
+  height: 12px;
+  width: 240px;
+  max-width: 100%;
+  background: radial-gradient(circle, #d62839 4px, transparent 4.6px) 0 0 / 60px 12px,
+    radial-gradient(circle, #2547a8 4px, transparent 4.6px) 12px 0 / 60px 12px,
+    radial-gradient(circle, #f6c343 4px, transparent 4.6px) 24px 0 / 60px 12px,
+    radial-gradient(circle, #187a42 4px, transparent 4.6px) 36px 0 / 60px 12px,
+    radial-gradient(circle, #f07f1a 4px, transparent 4.6px) 48px 0 / 60px 12px;
+}
+
+/* Wire figurines: single paths drawn as strings of beads that slowly travel */
+.wire {
+  fill: none;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 0.1 10;
+  animation: thread 2.4s linear infinite;
+}
+@keyframes thread {
+  to {
+    stroke-dashoffset: -20.2;
+  }
+}
+.figure-sway {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: sway 2.6s ease-in-out infinite alternate;
+}
+@keyframes sway {
+  from {
+    transform: rotate(-5deg);
+  }
+  to {
+    transform: rotate(5deg);
+  }
+}
+.figure-note {
+  transform-box: fill-box;
+  animation: float-note 4s ease-in-out infinite;
+}
+@keyframes float-note {
+  0% {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-30px);
+    opacity: 0;
+  }
+}
+.figure-steam {
+  transform-box: fill-box;
+  animation: thread 2.4s linear infinite, rise 3.2s ease-in-out infinite;
+}
+@keyframes rise {
+  0% {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-16px);
+    opacity: 0;
+  }
+}
+
+.bead-pulse {
+  animation: bead-pulse 1.8s ease-in-out infinite;
+}
+@keyframes bead-pulse {
+  0%,
+  100% {
+    scale: 1;
+  }
+  50% {
+    scale: 1.35;
+  }
+}
+
+/* Cards and tiles */
+.lift {
+  transition: translate 0.2s ease, box-shadow 0.2s ease;
+}
+.lift:hover {
+  translate: 0 -3px;
+  box-shadow: 0 14px 30px rgba(20, 33, 61, 0.16);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A member page's header shrinks as you scroll (browsers with scroll timelines) */
+@supports (animation-timeline: scroll()) {
+  .condense {
+    animation: condense linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0px 220px;
+  }
+  .condense-title {
+    animation: condense-title linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0px 220px;
+  }
+  .condense-fold {
+    animation: condense-fold linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0px 180px;
+  }
+}
+@keyframes condense {
+  to {
+    padding-top: 10px;
+    padding-bottom: 10px;
+    box-shadow: 0 10px 24px rgba(20, 33, 61, 0.08);
+  }
+}
+@keyframes condense-title {
+  to {
+    font-size: 30px;
+  }
+}
+@keyframes condense-fold {
+  to {
+    max-height: 0;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -1,0 +1,12 @@
+# Installed packages and build output
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Local settings
+.env*.local
+
+# Allow the app's own icons (the repository ignores images by default)
+!public/*.png
