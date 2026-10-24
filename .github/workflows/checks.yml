@@ -1,0 +1,63 @@
+# Checks on every push and pull request: lint and tests for the Python code
+# (with a PostgreSQL service for the database rules), and a type check and a
+# production build of the web pages. No real data is used: tests make their own.
+name: checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: chama
+          POSTGRES_PASSWORD: chama-ci
+          POSTGRES_DB: chama
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U chama -d chama"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      POSTGRES_USER: chama
+      POSTGRES_PASSWORD: chama-ci
+      POSTGRES_DB: chama
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      PSEUDONYM_KEY: ci-only-not-a-real-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install
+        run: pip install -e ".[dev,ml,extraction,web]"
+      - name: Lint
+        run: ruff check src tests
+      - name: Tests
+        run: pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Type check
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
