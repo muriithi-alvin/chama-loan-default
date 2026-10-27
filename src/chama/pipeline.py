@@ -12,6 +12,10 @@ Usage:
     python -m chama.pipeline train             # 6. train, test and log the models (MLflow)
     python -m chama.pipeline extract <photos>  #    ledger photos -> rows, with a vision model
     python -m chama.pipeline extract-eval      #    extraction measured against the typed pages
+    python -m chama.pipeline score             # 7. early-warning bands and reasons for the web pages
+    python -m chama.pipeline demo-chama        #    chama B's pages with fictional names, for demos
+    python -m chama.pipeline web-user add ...  #    accounts for the web interface (also list, deactivate)
+    python -m chama.pipeline web-stats         #    page times from the web server's request log
 
 Add --help after any step for details.
 """
@@ -278,6 +282,106 @@ def extract_eval(chama_id: str, pages: str | None, sample: int | None, refresh: 
 
     page_numbers = [int(p) for p in pages.split(",")] if pages else None
     _run(lambda: run_evaluate(load_config(), chama_id, page_numbers, sample, refresh, provider))
+
+
+@cli.command()
+@click.option("--chama", "chama_ids", multiple=True,
+              help="Score only this chama (repeat for more). Default: every chama in config.")
+def score(chama_ids: tuple[str, ...]) -> None:
+    """Save early-warning bands and reasons for the web pages (S-4).
+
+    Scores every member who owes at each chama's latest recorded meeting with
+    the chosen missed-repayment model (D-023): a band (Low, Medium, High) from
+    the run's cut-offs and the three strongest reasons in plain words, saved to
+    app.risk_scores with the meeting, the model run and the time. The score
+    itself is not saved. Needs the MLflow runs (DRIVE_DIR or ./mlruns).
+    """
+    from chama.web.services.scoring import run_score
+
+    _run(lambda: run_score(load_config(), get_engine(), list(chama_ids) or None))
+
+
+@cli.command("demo-chama")
+@click.option("--from", "source_id", default="chama_b", show_default=True)
+@click.option("--to", "demo_id", default="chama_demo", show_default=True)
+def demo_chama(source_id: str, demo_id: str) -> None:
+    """Copy a chama's typed pages with fictional names, for demonstrations (D-028).
+
+    Writes data/raw/<to>/ and its reviewed names file. Every member gets a fixed
+    fictional name, free-text columns are emptied and no photos are copied, and
+    the copy is checked for every real name before it is saved. Then run `all`
+    and `score`: the demo chama's bands match the real chama's, and a page
+    scanned into it never touches the real records.
+    """
+    from chama.web.services.demo import build_demo_chama
+
+    _run(lambda: build_demo_chama(load_config(), pseudonym_key(), source_id, demo_id))
+
+
+@cli.group("web-user")
+def web_user() -> None:
+    """Accounts for the web interface: add, list, deactivate, codes (R3).
+
+    Create the person's sign-in in Supabase first (Authentication > Users >
+    Add user, with Auto Confirm); this says what the email may open.
+    """
+
+
+@web_user.command("add")
+@click.option("--email", required=True)
+@click.option("--role", required=True, type=click.Choice(["official", "member", "admin"]))
+@click.option("--chama", "chama_id", required=True)
+@click.option("--member", "member_code", help="Member accounts: the member code whose records they see.")
+@click.option("--name", help="Officials: the name shown on the pages (fictional for a demo account).")
+@click.option("--position", type=click.Choice(["chair", "treasurer", "secretary"]))
+def web_user_add(email: str, role: str, chama_id: str, member_code: str | None, name: str | None,
+                 position: str | None) -> None:
+    """Give an email access to a chama's pages."""
+    from chama.db import create_schemas
+    from chama.web.services.accounts import add_user
+
+    def go() -> None:
+        engine = get_engine()
+        create_schemas(engine)
+        print(add_user(engine, email, role, chama_id, member_code, name, position))
+
+    _run(go)
+
+
+@web_user.command("list")
+def web_user_list() -> None:
+    """Every account, its role, chama and whether it is active."""
+    from chama.web.services.accounts import list_users
+
+    _run(lambda: print("\n".join(list_users(get_engine()))))
+
+
+@web_user.command("deactivate")
+@click.option("--email", required=True)
+def web_user_deactivate(email: str) -> None:
+    """Stop an account signing in and end its sessions."""
+    from chama.web.services.accounts import deactivate_user
+
+    _run(lambda: print(deactivate_user(get_engine(), email)))
+
+
+@web_user.command("codes")
+@click.option("--chama", "chama_id", required=True)
+def web_user_codes(chama_id: str) -> None:
+    """Member codes of a chama with the names the pages show, to link a member account."""
+    from chama.web.services.accounts import member_code_list
+
+    _run(lambda: print("\n".join(member_code_list(get_engine(), chama_id))))
+
+
+@cli.command("web-stats")
+@click.option("--last", type=int, help="Only the last N requests.")
+def web_stats(last: int | None) -> None:
+    """Median and 95th percentile server time per API route (X9)."""
+    from chama.web.services.stats import run_stats
+    from chama.web.settings import web_settings
+
+    _run(lambda: run_stats(web_settings().log_dir, last))
 
 
 if __name__ == "__main__":

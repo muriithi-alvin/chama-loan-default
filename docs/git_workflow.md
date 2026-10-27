@@ -10,7 +10,7 @@ kept after merging and reused for the next round of work (decision D-007).
 | `m1-data-pipeline` | Ingest, anonymise, validate, clean | M1 - Data pipeline |
 | `m2-features-models` | Features, models, SHAP | M2 - Features and models |
 | `m3-mlops` | MLflow, Evidently, Docker | M3 - MLOps |
-| `m4-dashboard` | Streamlit dashboard | M4 - Dashboard |
+| `m4-web-interface` | Web interface: pages, API, worker (D-026; replaces the planned `m4-dashboard`) | M4 - Web interface |
 | `m5-report` | Report and defence | M5 - Report and defence |
 | `housekeeping` | Bug fixes, docs, templates, config, tooling not tied to a milestone | none |
 

@@ -90,17 +90,21 @@ def load_to_raw(frames: dict[str, pd.DataFrame], engine, chama_id: str, source_f
 
 
 def raw_files(folder: Path) -> list[Path]:
-    """Yearly Excel files in a Chama's folder, in name order.
+    """Yearly Excel files in a Chama's folder, in name order, then the pages
+    scanned and accepted in the web interface (scans/scan-<upload>.xlsx, D-027).
 
+    Both are raw files, so reloading from files keeps the scanned pages too.
     Skips Excel's temporary '~$' files and the empty template.
     """
     if not folder.is_dir():
         return []
-    return sorted(
-        p
-        for p in folder.glob("*.xlsx")
-        if not p.name.startswith("~$") and p.stem != "raw_template"
-    )
+
+    def usable(p: Path) -> bool:
+        return not p.name.startswith("~$") and p.stem != "raw_template"
+
+    typed = sorted(p for p in folder.glob("*.xlsx") if usable(p))
+    scanned = sorted(p for p in (folder / "scans").glob("scan-*.xlsx") if usable(p))
+    return typed + scanned
 
 
 def read_folder(folder: Path, chama_id: str) -> tuple[dict[str, pd.DataFrame], list[str]]:

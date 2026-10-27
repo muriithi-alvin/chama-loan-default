@@ -156,8 +156,10 @@ def write(df: pd.DataFrame, out_dir: Path, config: dict,
     return data_path, manifest_path
 
 
-def read_table(engine, table: ExportTable) -> pd.DataFrame:
-    from sqlalchemy import text
+def read_table(engine, table: ExportTable, skip_chamas: tuple[str, ...] = ()) -> pd.DataFrame:
+    """The table, without the chamas in `skip_chamas` (the demo copies, D-028:
+    training on them would count chama B's rows twice)."""
+    from sqlalchemy import bindparam, text
 
     from chama.db import table_exists
 
@@ -166,9 +168,12 @@ def read_table(engine, table: ExportTable) -> pd.DataFrame:
             raise StepFailed(
                 f"analytics.{table.name} not found. Run python -m chama.pipeline clean first."
             )
-        df = pd.read_sql(
-            text(f"SELECT * FROM analytics.{table.name} ORDER BY {table.order_by}"), conn
-        )
+        sql = text(
+            f"SELECT * FROM analytics.{table.name} "
+            "WHERE NOT (chama_id IN :skip) "
+            f"ORDER BY {table.order_by}"
+        ).bindparams(bindparam("skip", expanding=True))
+        df = pd.read_sql(sql, conn, params={"skip": list(skip_chamas) or ["-"]})
     for col in (table.time, "outcome_month"):
         df[col] = pd.to_datetime(df[col])
     df[table.label] = df[table.label].astype("Int64")
@@ -179,9 +184,10 @@ def run(config: dict, engine, out_dir: Path | None = None) -> None:
     from chama.anonymisation.aliases import saved_aliases
 
     names = [n for a in saved_aliases(engine).values() for pair in a.items() for n in pair]
+    demo = tuple(c["id"] for c in config["chamas"] if c.get("demo"))
     frames = {}
     for table in TABLES.values():   # check every table before writing any
-        df = read_table(engine, table)
+        df = read_table(engine, table, skip_chamas=demo)
         check_columns(df, table)
         check_no_names(df, names, table.name)
         frames[table.name] = df

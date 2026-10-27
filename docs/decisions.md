@@ -530,3 +530,77 @@ OpenAI-style API).
 **Consequences.** A 27B open model may read this handwriting less accurately
 than Claude; `extract-eval` measures both, and the review step catches what
 either misses.
+
+## D-026 A web interface, Kibaba, replaces the Streamlit dashboard; the mobile app is future work
+**Context.** M4 was planned as a Streamlit dashboard for officials. The
+supervisor asked for wider reach (a mobile app); with the Sprint II review on
+28 October 2026 there was not time to build and test a native app as well as
+the scan-to-score workflow.
+**Decision.** M4 is a web interface for officials and members: role-based
+sign-in, the chama's records, scanning a ledger page with review before it is
+saved, and early-warning bands with their reasons. It works in any phone or
+computer browser and can be added to a phone's home screen (a web app
+manifest). The JSON API it uses is the one a mobile app would call, so the app
+stays possible and becomes future work (report, Chapter 6). The interface is
+called **Kibaba**, from the proverb *haba na haba hujaza kibaba* ("little by
+little fills the measure"), which its sign-in page shows: a chama's savings
+and records build up one meeting at a time.
+**Rejected.** Streamlit (no real roles or sessions, a page reload for each
+change, hard to make work well on a phone); a native mobile app now (two code
+bases, app-store builds and device testing within days).
+**Consequences.** The pages, roles and API are specified in
+`docs/m4_master_prompt.md`; their IDs (G1, OFF-3, T9 ...) become the Sprint
+III traceability table.
+
+## D-027 Pages in Next.js; a FastAPI JSON API and a job worker behind them
+**Context.** The master prompt planned FastAPI with Jinja2 templates and
+HTMX. Alvin asked for a more modern, animated and responsive interface (beads
+that move between band strands, a scroll story, page transitions), which is
+more natural in React.
+**Decision.** Two parts, one site:
+- `frontend/`: Next.js 16 (React 19, TypeScript, Tailwind CSS 4, Motion for
+  animation, SWR for live updates). Pages are rendered on the server with
+  their data, so they arrive complete; the browser talks only to this server,
+  which forwards `/api/*` to the Python API.
+- `src/chama/web/`: a FastAPI JSON API that holds every rule (sessions,
+  roles, CSRF, demo names, reads of the records and scores), and a worker
+  (`python -m chama.web.worker`) that reads scanned photos and runs the
+  pipeline from the `app.jobs` table with `SELECT ... FOR UPDATE SKIP LOCKED`,
+  without Redis. Scores and reasons are computed by `python -m chama.pipeline
+  score` and saved, so no model runs while a page loads.
+**Sign-in.** Supabase Auth (free plan) holds the passwords. The API sends the
+email and password to Supabase and, if it accepts them and the email has an
+active account in `app.users`, starts its own session: an HttpOnly, Secure,
+SameSite=Lax cookie whose SHA-256 alone is stored, and a CSRF token sent back
+with every change. No Supabase key reaches a page.
+**Scans as raw files.** An accepted scan is written as
+`data/raw/<chama>/scans/scan-<upload>.xlsx` in the typed layout and its photo
+as the next ledger page, so the loader, the name review and dbt treat it like
+a typed page, and a rebuild from files keeps it (S-3).
+**Rejected.** Jinja2 and HTMX (less suited to the animation asked for);
+Supabase sessions in the browser (keys and tokens in page scripts, and the
+role rules would sit in two places); Redis or Celery for jobs (another
+service on a 7.4 GB laptop).
+**Consequences.** Two runtimes (Node.js and Python) and three processes to
+start; the README lists them. Next.js needs about 1 GB of memory while
+building.
+
+## D-028 A demo chama with fictional names
+**Context.** Ground rule G5: real names never appear on a projector. Showing
+chama B with names replaced on screen would still let a demo scan change
+chama B's real records and bands.
+**Decision.** `python -m chama.pipeline demo-chama` copies chama B's typed
+pages into `chama_demo` (marked `demo: true` in `config/pipeline.yaml`) with
+every member renamed to a fixed fictional Kenyan name chosen from their
+member code, free-text columns emptied and no photos. The copy is checked for
+every word of every real name before it is written. The pipeline then treats
+it as a chama of its own, so its bands and reasons match chama B's; demo
+accounts belong to it, and the handwritten demo page is scanned into it.
+`DEMO_MODE=true` stays as a safety net: fictional names for any real chama
+and no real ledger photo on any page. The pages carry no "demo" wording (no
+banner, and the demo chama's name has no "(demo)"), so a demonstration looks
+like the real service; the fictional names are explained in the report and
+when presenting. This replaces the banner in the master prompt's G5.
+**Consequences.** `export` leaves demo chamas out, so models are never
+trained on chama B's rows twice. No fictional name shares a word with a real
+member's name.

@@ -43,3 +43,6 @@ transform/dbt_packages/
 
 # Modelling exports (data, even though codes only)
 *.parquet
+
+# ---- Web interface request log (codes only, still local) ----
+data/logs/
