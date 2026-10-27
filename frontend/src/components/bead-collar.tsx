@@ -4,10 +4,11 @@ import { useEffect, useRef } from "react";
 
 // The sign-in page's bead collar (section 7, "the one memorable moment"):
 // six rings of glass beads. Beads part around the pointer and spring back;
-// a tap sends a colour ripple outwards; a soft highlight chases round each
-// ring. Drawn on one canvas from pre-rendered bead sprites, it pauses when
-// the tab is hidden or the collar is off screen, and with reduced motion it
-// is drawn once and stays still. The form never waits for it.
+// a tap sends a colour ripple outwards; a soft highlight goes round each ring
+// once on arrival. Drawn on one canvas from pre-rendered bead sprites, it
+// stops drawing once nothing moves (an idle page costs nothing) and when the
+// tab is hidden or the collar is off screen; with reduced motion it is drawn
+// once and stays still. The form never waits for it.
 
 const SIZE = 580; // drawing units; the canvas scales to its box
 const RADII = [126, 152, 178, 204, 230, 256];
@@ -87,6 +88,7 @@ export function BeadCollar({ className = "" }: { className?: string }) {
     let frame = 0;
     let visible = true;
     let onScreen = true;
+    const chaseUntil = performance.now() + CHASE_SECONDS * 1000;
 
     const resize = () => {
       const box = canvas.getBoundingClientRect();
@@ -102,13 +104,15 @@ export function BeadCollar({ className = "" }: { className?: string }) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
-      const chase = still ? -1 : (now / 1000 / CHASE_SECONDS) % 1;
+      // the highlight fades out over its last 0.6 s instead of stopping dead
+      const glow = still ? 0 : Math.min(1, Math.max(0, (chaseUntil - now) / 600));
+      const chase = (now / 1000 / CHASE_SECONDS) % 1;
       for (const b of beads) {
         let size = BEAD;
-        if (chase >= 0) {
+        if (glow > 0) {
           const gap = Math.abs(chase - b.turn);
           const near = Math.min(gap, 1 - gap);
-          if (near < 0.02) size *= 1 + 0.3 * (1 - near / 0.02);
+          if (near < 0.02) size *= 1 + 0.3 * glow * (1 - near / 0.02);
         }
         if (ripple) {
           const reach = (now - ripple.start) * 0.9; // drawing units per ms
@@ -123,6 +127,7 @@ export function BeadCollar({ className = "" }: { className?: string }) {
 
     const step = (now: number) => {
       // springs: each bead is pushed away from the pointer and pulled home
+      let speed = 0;
       for (const b of beads) {
         let tx = 0;
         let ty = 0;
@@ -140,10 +145,12 @@ export function BeadCollar({ className = "" }: { className?: string }) {
         b.vy = (b.vy + (ty - b.dy) * 0.12) * 0.78;
         b.dx += b.vx;
         b.dy += b.vy;
+        speed = Math.max(speed, Math.abs(b.vx) + Math.abs(b.vy));
       }
       if (ripple && now - ripple.start > 1100) ripple = null;
       draw(now);
-      frame = visible && onScreen ? requestAnimationFrame(step) : 0;
+      const moving = speed > 0.01 || ripple !== null || now < chaseUntil;
+      frame = moving && visible && onScreen ? requestAnimationFrame(step) : 0;
     };
 
     const start = () => {
@@ -160,6 +167,7 @@ export function BeadCollar({ className = "" }: { className?: string }) {
     };
     const onLeave = () => {
       pointer = null;
+      start(); // the beads spring back home
     };
     const onDown = (e: PointerEvent) => {
       const p = toLocal(e);

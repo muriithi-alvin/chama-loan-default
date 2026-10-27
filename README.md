@@ -268,5 +268,5 @@ docker compose up -d                          # the database
 python -m chama.pipeline score                # bands and reasons for the pages
 uvicorn chama.web.app:app --port 8000         # the API
 python -m chama.web.worker                    # the worker, in a second terminal
-cd frontend; npm install; npm run dev         # the pages, in a third: http://localhost:3000
+cd frontend; npm install; npm run build; npm start   # the pages, in a third: http://localhost:3000
 ```

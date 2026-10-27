@@ -21,6 +21,7 @@ export const metadata: Metadata = {
   title: { default: "Kibaba", template: "%s · Kibaba" },
   description: "Officials see which members to follow up and why. Members see their own records.",
   applicationName: "Kibaba",
+  icons: { icon: "/icon.svg" },
   appleWebApp: { capable: true, title: "Kibaba", statusBarStyle: "default" },
   robots: { index: false, follow: false },
 };

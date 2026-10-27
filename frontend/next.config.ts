@@ -15,6 +15,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  // The dev server only serves its live-reload connection to pages opened at
+  // localhost; opened at 127.0.0.1 a page showed but never came to life.
+  allowedDevOrigins: ["127.0.0.1"],
   // forbidden(): the "not allowed" page with HTTP 403 (R4)
   experimental: { authInterrupts: true },
   async rewrites() {

@@ -140,14 +140,16 @@
     radial-gradient(circle, #f07f1a 4px, transparent 4.6px) 48px 0 / 60px 12px;
 }
 
-/* Wire figurines: single paths drawn as strings of beads that slowly travel */
+/* Wire figurines: single paths drawn as strings of beads. The beads travel for
+   a few seconds when a page opens, then rest: an endless animation repaints
+   the drawing on every frame for as long as the page is open. */
 .wire {
   fill: none;
   stroke-width: 6;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-dasharray: 0.1 10;
-  animation: thread 2.4s linear infinite;
+  animation: thread 2.4s linear 3;
 }
 @keyframes thread {
   to {
@@ -157,7 +159,8 @@
 .figure-sway {
   transform-box: fill-box;
   transform-origin: 50% 100%;
-  animation: sway 2.6s ease-in-out infinite alternate;
+  /* 3.5 swings end upright, where the figure stands at rest */
+  animation: sway 2.6s ease-in-out 3.5 alternate;
 }
 @keyframes sway {
   from {
@@ -169,7 +172,7 @@
 }
 .figure-note {
   transform-box: fill-box;
-  animation: float-note 4s ease-in-out infinite;
+  animation: float-note 4s ease-in-out 2 both;
 }
 @keyframes float-note {
   0% {
@@ -186,7 +189,7 @@
 }
 .figure-steam {
   transform-box: fill-box;
-  animation: thread 2.4s linear infinite, rise 3.2s ease-in-out infinite;
+  animation: thread 2.4s linear 3, rise 3.2s ease-in-out 2 both;
 }
 @keyframes rise {
   0% {

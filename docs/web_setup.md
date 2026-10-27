@@ -101,14 +101,16 @@ Four terminals, each in the project folder with the `chama` environment active:
 docker compose up -d                          # 1. the database
 uvicorn chama.web.app:app --port 8000         # 2. the API
 python -m chama.web.worker                    # 3. the worker (loads the model, about a minute)
-cd frontend; npm run dev                      # 4. the pages: http://localhost:3000
+cd frontend; npm run build; npm start         # 4. the pages: http://localhost:3000
 ```
 
-For a demonstration, build the pages once and serve the fast version:
-
-```powershell
-cd frontend; npm run build; npm start
-```
+Step 4 builds the pages once (a few minutes) and serves the fast version;
+build again after changing anything in `frontend/`. Use this for trying the
+site and for every demonstration. `npm run dev` instead serves pages that
+update as you edit the code, but each page loads about 5.6 MB of unminified
+scripts and is compiled the first time it opens, which is slow on this
+laptop. In that mode open http://localhost:3000 or http://127.0.0.1:3000
+only: at any other address the page shows but its buttons do nothing.
 
 Check that everything is ready: http://localhost:3000/api/health shows
 `ready` once the database answers and the worker has loaded the model.
@@ -121,8 +123,8 @@ photo. The demo chama's names are fictional already.
 
 Find the laptop's address (`ipconfig`, e.g. 192.168.1.20), then in `.env`
 set `COOKIE_SECURE=false` and add `http://192.168.1.20:3000` to
-`WEB_ORIGINS`, restart the API, and open http://192.168.1.20:3000 on the
-phone. Put `COOKIE_SECURE` back to `true` afterwards. (HTTPS deployment is
+`WEB_ORIGINS`, restart the API, serve the built pages (`npm start`, not
+`npm run dev`) and open http://192.168.1.20:3000 on the phone. Put `COOKIE_SECURE` back to `true` afterwards. (HTTPS deployment is
 Sprint III.)
 
 ## 3. Checks
