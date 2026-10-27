@@ -93,8 +93,14 @@ function ReasonList() {
 }
 
 function Caption({ progress, index }: { progress: MotionValue<number>; index: number }) {
-  const ranges = [[0, 0.05, 0.25, 0.32], [0.32, 0.4, 0.62, 0.7], [0.72, 0.8, 1, 1.01]][index];
-  const opacity = useTransform(progress, ranges, [0, 1, 1, 0]);
+  // Scroll positions must stay within 0..1: Motion hands them to the browser's
+  // animation engine, which refuses anything outside that range.
+  const [input, output] = ([
+    [[0, 0.25, 0.32], [1, 1, 0]],
+    [[0.32, 0.4, 0.62, 0.7], [0, 1, 1, 0]],
+    [[0.72, 0.8, 1], [0, 1, 1]],
+  ] as const)[index];
+  const opacity = useTransform(progress, [...input], [...output]);
   return (
     <motion.p style={{ opacity }} className="absolute inset-x-0 top-0 mx-auto max-w-[36em] px-4 text-center text-[18px] font-bold sm:text-[20px]">
       {STEPS[index]}
