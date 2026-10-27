@@ -7,6 +7,9 @@
     python -m chama.pipeline web-user list
     python -m chama.pipeline web-user deactivate --email <email>
 
+To change an account (another member, role or chama), deactivate it, then add
+the same email again with the new details: the account is reopened.
+
 The password is set in Supabase (Authentication > Users > Add user); this
 only says which chama, role and member record the email may open.
 """
@@ -40,7 +43,8 @@ def add_user(engine, email: str, role: str, chama_id: str, member_code: str | No
     if position and position not in POSITIONS:
         raise StepFailed(f"Position must be one of {', '.join(POSITIONS)}.")
     with engine.begin() as conn:
-        if users.by_email(conn, email):
+        existing = users.by_email(conn, email)
+        if existing and existing.active:
             raise StepFailed(f"{email} already has an account. Deactivate it first to change it.")
         if member_code:
             known = conn.execute(text("SELECT 1 FROM private.member_codes WHERE chama_id = :c "
@@ -48,8 +52,13 @@ def add_user(engine, email: str, role: str, chama_id: str, member_code: str | No
             if not known:
                 raise StepFailed(f"No member {member_code} in {chama_id}. List the codes with "
                                  "python -m chama.pipeline web-user codes --chama " + chama_id)
-        users.add(conn, email, role, chama_id, member_code, name if role != "member" else None, position)
-    return f"Added {role} {email} for {chama_id}" + (f" (member {member_code})" if member_code else "")
+        details = (role, chama_id, member_code, name if role != "member" else None, position)
+        if existing:
+            users.reopen(conn, existing.id, *details)
+        else:
+            users.add(conn, email, *details)
+    done = "Reopened" if existing else "Added"
+    return f"{done} {role} {email} for {chama_id}" + (f" (member {member_code})" if member_code else "")
 
 
 def list_users(engine) -> list[str]:

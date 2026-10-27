@@ -146,6 +146,24 @@ def test_jobs_are_taken_once(engine):
     assert json.dumps(taken, default=str)
 
 
+def test_a_deactivated_account_can_be_given_another_member(engine):
+    from chama import StepFailed
+    from chama.web.services import accounts
+
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO private.member_codes VALUES ('chama_demo', 'a', 'M-a'), "
+                          "('chama_demo', 'b', 'M-b')"))
+    accounts.add_user(engine, "amani@example.com", "member", "chama_demo", "M-a", None, None)
+    with pytest.raises(StepFailed, match="Deactivate it first"):
+        accounts.add_user(engine, "amani@example.com", "member", "chama_demo", "M-b", None, None)
+    accounts.deactivate_user(engine, "amani@example.com")
+    assert accounts.add_user(engine, "amani@example.com", "member", "chama_demo", "M-b", None, None).startswith(
+        "Reopened")
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT member_code, active FROM app.users WHERE email = 'amani@example.com'")).all()
+    assert rows == [("M-b", True)]
+
+
 def test_the_footer_status_gives_members_no_score_details(engine):
     from chama.web.data.users import User
     from chama.web.routes.session import records_status

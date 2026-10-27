@@ -58,6 +58,16 @@ def add(conn: Connection, email: str, role: str, chama_id: str, member_code: str
     ).scalar_one()
 
 
+def reopen(conn: Connection, user_id: int, role: str, chama_id: str, member_code: str | None,
+           display_name: str | None, position: str | None) -> None:
+    """Give a deactivated account its new role and record, and open it again."""
+    conn.execute(
+        text("UPDATE app.users SET role = :r, chama_id = :c, member_code = :m, display_name = :n, "
+             "position = :p, active = true WHERE id = :i"),
+        {"r": role, "c": chama_id, "m": member_code, "n": display_name, "p": position, "i": user_id},
+    )
+
+
 def set_active(conn: Connection, user_id: int, active: bool) -> None:
     conn.execute(text("UPDATE app.users SET active = :a WHERE id = :i"), {"a": active, "i": user_id})
     if not active:
