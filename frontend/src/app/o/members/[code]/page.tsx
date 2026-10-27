@@ -6,6 +6,7 @@ import { BandKey } from "@/components/band-key";
 import { BandChip, Bead, EffectIcon, NoLoanChip } from "@/components/beads";
 import { Card, PageBody } from "@/components/page-header";
 import { dayAndTime, meetingWhen, money, month, monthShort } from "@/lib/format";
+import { LOAN_TYPE, loanStatus as status } from "@/lib/loans";
 import { apiGet } from "@/lib/server-api";
 import type { MemberPage } from "@/lib/types";
 
@@ -14,21 +15,6 @@ type Params = Promise<{ code: string }>;
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { code } = await params;
   return { title: `Member ${code.slice(-4).toUpperCase()}` };
-}
-
-const LOAN_TYPE: Record<string, string> = {
-  normal: "Normal", emergency: "Emergency", school_fees: "School fees", top_up: "Top-up", other: "Other",
-};
-
-function status(loan: MemberPage["loans"][number]) {
-  if (loan.running && loan.status === "overdue") return { text: "Running, past its due month", bead: "red" as const };
-  if (loan.running) return { text: "Running", bead: "cobalt" as const };
-  if (loan.status === "topped_up") {
-    return { text: loan.rolled_into_month ? `Rolled into the ${month(loan.rolled_into_month)} loan` : "Rolled into a bigger loan", bead: "empty" as const };
-  }
-  if (loan.status === "lost_track") return { text: "No longer in the records", bead: "empty" as const };
-  if (loan.status === "repaid_late") return { text: "Repaid after its due month", bead: "leaf" as const };
-  return { text: "Repaid", bead: "leaf" as const };
 }
 
 export default async function MemberDetail({ params }: { params: Params }) {

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { Bead, BeadRow } from "@/components/beads";
 import { CountUp } from "@/components/count-up";
@@ -37,11 +38,14 @@ export default async function MySummary() {
         <Card tone="cream" className="flex flex-col gap-2">
           <h2 className="text-[20px]">Loan balance</h2>
           <p className="tabular font-display text-[44px] font-extrabold leading-none">
-            <CountUp value={s.balance} format={(n) => money(n)} />
+            <CountUp value={s.balance} as="money" />
           </p>
           <p className="text-[16px] text-subtle">
             {running.length === 0 ? "You have no loan running." : `${running.length} ${running.length === 1 ? "loan" : "loans"} running`}
           </p>
+          <Link href="/m/loans" className="mt-1 text-[16px] font-bold">
+            See all my loans ({s.loans.length})
+          </Link>
         </Card>
         <Card tone="ice" className="flex flex-col gap-2">
           <h2 className="text-[20px]">Next due</h2>

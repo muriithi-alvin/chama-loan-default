@@ -3,6 +3,7 @@ import { forbidden } from "next/navigation";
 
 import { AppFooter } from "@/components/app-footer";
 import { Logo } from "@/components/beads";
+import { MemberNav } from "@/components/member-nav";
 import { SignOutButton } from "@/components/sign-out";
 import { apiGet, apiGetOptional } from "@/lib/server-api";
 import type { Me, RecordsStatus } from "@/lib/types";
@@ -28,6 +29,7 @@ export default async function MembersLayout({ children }: { children: React.Reac
           </span>
           <SignOutButton />
         </div>
+        <MemberNav />
       </header>
       <div className="flex-1">{children}</div>
       <AppFooter role={me.user.role} status={status} />

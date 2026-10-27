@@ -18,7 +18,7 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
   story of how members are put in bands), Records (meetings list and meeting
   page beside its photo), Scan a page, Scan status, Review and correct, the
   Pipeline run timeline, Upload history and the Edit record; for members My
-  summary. Loading, empty, error and "not allowed" states; a web app manifest
+  summary and My loans (MEM-2, brought forward from Sprint III). Loading, empty, error and "not allowed" states; a web app manifest
   so officials can add it to a phone's home screen. A short key to the bands
   (what each meant in testing, with a link to About the scores) wherever bands
   appear. No "demo" wording on any page; the demo chama's fictional names are
@@ -39,7 +39,8 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
   a kind and a second run per upload.
 - **Commands**: `score` (bands and plain-word reasons for each chama's latest
   meeting, saved with the meeting, model run and time), `demo-chama` (chama B
-  with fictional names, D-028), `web-user add | list | deactivate | codes`,
+  with fictional names, D-028), `web-user add | list | deactivate | codes`
+  (adding a deactivated email again reopens it with the new details),
   `web-stats`.
 - **Docs**: `docs/web_setup.md` (Supabase, the demo chama, accounts, running
   it) and the master prompt as `docs/m4_master_prompt.md`.
