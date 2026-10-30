@@ -6,6 +6,40 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
 ## M4 — branch `m4-web-interface`
 
+### Changed — after the Sprint II review (reviewers: too plain, too technical)
+
+- **Plain words for the bands:** "Follow up now", "Keep an eye on" and "Less
+  likely to miss", each with one sentence of meaning; reasons say "more likely
+  to miss" or "less likely to miss". Test figures ("about 1 in 3") are only on
+  the explanation page, now called How Kibaba decides.
+- **No model terms on working pages:** model-run names and times are behind a
+  closed "Technical details" on the member page; the pipeline steps read
+  "Saving the page", "Matching names", "Hiding names", "Updating the records"
+  and "Finding who to follow up".
+- **More colour, in the Shanga style:** a landing page at `/` for visitors who
+  are not signed in (what Kibaba does, three steps in bead rings, the three
+  colours, officials and members, privacy); every page header is a colour
+  block with a bead-collar corner and a beaded edge; the Overview opens with a
+  tile per colour; member pages are tinted by colour; the sidebar keeps four
+  main pages and puts the rest under More.
+- **Simpler member page:** loans running first, past loans folded away.
+- **Fixed:** the About page's scroll story no longer mismatches the server's
+  HTML for readers who prefer reduced motion.
+
+### Added — Sprint III
+
+- **Model registry (S-8, D-030):** `register-model` puts the chosen model in
+  the MLflow registry with the alias `champion`; scoring loads it by alias and
+  each score records the version and a SHA-256 of the model's files.
+- **Chama A as the test chama (D-029):** `test_only: true` keeps a chama out
+  of the modelling tables; `reading_notes` add a chama's own column layout to
+  the reading instructions for its scans only; `evaluate-chama chama_a` tests
+  the model trained on chama B on it and logs the result to the MLflow
+  experiment `chama-missed-repayment-held-out`.
+- **Data drift report (S-7, D-031):** `drift --chama <id> --months 12` compares
+  the model's 17 inputs in recent meetings with the rows it learned from, with
+  Evidently; the HTML report goes to `data/reports/drift/` and MLflow.
+
 ### Added — Kibaba, the web interface (D-026, D-027, D-028)
 
 - **Pages** (`frontend/`, Next.js 16, TypeScript, Tailwind CSS 4, Motion), in
@@ -43,7 +77,8 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
   (adding a deactivated email again reopens it with the new details),
   `web-stats`.
 - **Docs**: `docs/web_setup.md` (Supabase, the demo chama, accounts, running
-  it) and the master prompt as `docs/m4_master_prompt.md`.
+  it), `docs/m4_test_record.md` (T1 to T10: the automated tests and manual
+  checks for each) and the master prompt as `docs/m4_master_prompt.md`.
 - **Tests**: reason sentences for every model feature, fictional names,
   sign-in, sessions, CSRF and every role against the routes, scan rules, and
   database rules on a separate `chama_test` database (skipped without Docker).
@@ -54,6 +89,9 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
   `data/raw/<chama>/scans/scan-<upload>.xlsx`, so a reload keeps them (S-3).
 - `export` leaves demo chamas out of the modelling tables.
 - `ExtractionFailed` says whether trying again may work (rate limit, outage).
+- The extractor offers only the X25519 key exchange: the laptop's network
+  dropped OpenSSL 3.5's larger post-quantum handshake to Groq, so every read
+  timed out (certificates are still checked).
 - `pyproject.toml` gains a `web` extra; `.env.example` the web settings;
   `config/pipeline.yaml` chama names and `chama_demo`.
 
