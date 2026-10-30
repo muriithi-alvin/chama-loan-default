@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { Bead, BeadRow } from "@/components/beads";
+import { Bead } from "@/components/beads";
 import { CountUp } from "@/components/count-up";
-import { Singing } from "@/components/figurines";
-import { Card, PageBody } from "@/components/page-header";
+import { Market, Singing } from "@/components/figurines";
+import { Card, PageBody, PageHeader } from "@/components/page-header";
 import { meetingWhen, money, month, monthShort } from "@/lib/format";
 import { apiGet } from "@/lib/server-api";
 import type { MemberPage } from "@/lib/types";
@@ -27,12 +27,9 @@ export default async function MySummary() {
 
   return (
     <PageBody className="max-w-[960px]">
-      <header className="flex flex-col gap-2">
-        <p className="text-[17px] text-muted">Habari,</p>
-        <h1 className="text-[40px] sm:text-[52px]">{s.name}</h1>
-        {s.member_since && <p className="text-[16px] text-muted">In the chama&apos;s records since {s.member_since}</p>}
-        <BeadRow className="mt-2" />
-      </header>
+      <PageHeader title={<>Habari, {s.name.split(" ")[0]}</>}
+        sub={`${s.name}${s.member_since ? `, in the chama's records since ${s.member_since}` : ""}`}
+        art={<Market tone="colour" className="h-[140px]" />} />
 
       <div className="grid gap-5 md:grid-cols-2">
         <Card tone="cream" className="flex flex-col gap-2">

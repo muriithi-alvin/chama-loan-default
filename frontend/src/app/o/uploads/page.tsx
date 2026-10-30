@@ -22,7 +22,7 @@ const STATUS: Record<string, { text: string; bead: "cobalt" | "leaf" | "red" | "
 
 function next(u: Upload): { href: string; label: string } {
   if (u.status === "ready") return { href: `/o/scans/${u.id}/review`, label: "Review" };
-  if (u.status === "accepted" && u.run_id) return { href: `/o/runs/${u.run_id}`, label: "Pipeline run" };
+  if (u.status === "accepted" && u.run_id) return { href: `/o/runs/${u.run_id}`, label: "Records update" };
   return { href: `/o/scans/${u.id}`, label: "Status" };
 }
 
@@ -30,7 +30,7 @@ export default async function UploadsPage() {
   const { uploads } = await apiGet<{ uploads: Upload[] }>("/api/uploads");
   return (
     <PageBody>
-      <PageHeader title="Upload history" sub="Every scanned page, who sent it and what happened to it."
+      <PageHeader title="Upload history" tone="ice" sub="Every scanned page, who sent it and what happened to it."
         action={<Link href="/o/scan" className="inline-flex min-h-12 items-center gap-2 rounded-button bg-cobalt px-5 text-[16px] font-bold text-white no-underline hover:bg-cobalt-dark hover:text-white"><Camera aria-hidden="true" size={18} /> Scan a page</Link>} />
       {uploads.length === 0 ? (
         <Card tone="cream" className="relative flex min-h-[220px] flex-col items-start justify-center gap-4 overflow-hidden">
@@ -52,7 +52,7 @@ export default async function UploadsPage() {
                     Scan {u.id}{u.page_no ? `, now ledger page ${u.page_no}` : ""}
                   </span>
                   <span className="text-[15px] text-muted">
-                    Sent by {u.uploaded_by} on {dayAndTime(u.created_at)}{u.model ? ` · read by ${u.model}` : ""}
+                    Sent by {u.uploaded_by} on {dayAndTime(u.created_at)}
                   </span>
                 </span>
                 <span className="inline-flex items-center gap-2 text-[15px] font-bold"><Bead colour={s.bead} size={12} />{s.text}</span>

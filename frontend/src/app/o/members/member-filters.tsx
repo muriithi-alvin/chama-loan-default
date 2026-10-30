@@ -4,11 +4,13 @@ import { Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
+import { BAND } from "@/components/beads";
+
 const BANDS = [
   { value: "", label: "All" },
-  { value: "high", label: "High" },
-  { value: "medium", label: "Medium" },
-  { value: "low", label: "Low" },
+  { value: "high", label: BAND.high.label },
+  { value: "medium", label: BAND.medium.label },
+  { value: "low", label: BAND.low.label },
   { value: "none", label: "No loan running" },
 ];
 

@@ -15,7 +15,7 @@ export default async function ScanStatusPage({ params }: { params: Params }) {
   if (!/^\d+$/.test(id)) notFound();
   return (
     <PageBody className="max-w-[960px]">
-      <PageHeader title="Reading the page"
+      <PageHeader title="Reading the page" tone="ice"
         crumbs={<><Link href="/o/uploads">Upload history</Link><span aria-hidden="true" className="mx-2">/</span>Scan {id}</>} />
       <ScanStatus id={Number(id)} />
     </PageBody>

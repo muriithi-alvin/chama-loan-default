@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
-import { Bead, BeadRow } from "@/components/beads";
-import { Card, PageBody } from "@/components/page-header";
+import { Bead } from "@/components/beads";
+import { Card, PageBody, PageHeader } from "@/components/page-header";
 import { money, month } from "@/lib/format";
 import { LOAN_TYPE, loanStatus, type Loan } from "@/lib/loans";
 import { apiGet } from "@/lib/server-api";
@@ -17,11 +17,7 @@ export default async function MyLoans() {
 
   return (
     <PageBody className="max-w-[960px]">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-[40px] sm:text-[52px]">My loans</h1>
-        <p className="text-[17px] text-muted">Every loan of yours in the chama&apos;s records, newest first.</p>
-        <BeadRow className="mt-2" />
-      </header>
+      <PageHeader title="My loans" tone="ice" sub="Every loan of yours in the chama's records, newest first." />
       <LoanList id="loans-running" title="Running" loans={running} empty="You have no loan running." />
       <LoanList id="loans-past" title="Past loans" loans={past} empty="No past loans in the records." />
     </PageBody>
