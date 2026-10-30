@@ -84,3 +84,11 @@ def test_writes_parquet_and_manifest(tmp_path):
     assert manifest["members"] == 2
     assert manifest["default_statuses"] == CONFIG["default_statuses"]
     assert manifest["warning_horizon_meetings"] == 3
+
+
+def test_demo_and_test_only_chamas_never_reach_the_modelling_tables():
+    from chama.features.export import not_for_training
+
+    config = {"chamas": [{"id": "chama_a", "test_only": True}, {"id": "chama_b"},
+                         {"id": "chama_demo", "demo": True}]}
+    assert not_for_training(config) == ("chama_a", "chama_demo")

@@ -27,6 +27,7 @@ from chama.web.data import scans
 from chama.web.db import engine as web_engine
 from chama.web.services import pipeline_run
 from chama.web.services import scans as scan_service
+from chama.web.settings import chamas
 
 log = logging.getLogger("chama.worker")
 
@@ -48,7 +49,8 @@ def read_photo(engine, config: dict, job: dict) -> None:
         scans.set_job_step(conn, job["id"], "reading")
     provider, _ = provider_settings(settings)
     try:
-        extraction = model_read(Path(upload["photo_path"]), settings, make_extractor(settings))
+        notes = chamas().get(upload["chama_id"], {}).get("reading_notes", "")
+        extraction = model_read(Path(upload["photo_path"]), settings, make_extractor(settings), notes)
     except ExtractionFailed as e:
         with engine.begin() as conn:
             if e.transient and job["attempts"] < MAX_ATTEMPTS:
@@ -130,11 +132,12 @@ def main() -> None:
     heartbeat.beat()
     heartbeat.start()
 
-    log.info("loading the chosen model")
+    log.info("loading the model with the alias champion from the registry")
     model = LoadedModel.load(config)
     heartbeat.run_id, heartbeat.loaded = model.run_id, True
     heartbeat.beat()
-    log.info("model run %s loaded; waiting for jobs", model.run_id[:8])
+    log.info("model version %s loaded (run %s, checksum %s); waiting for jobs",
+             model.version, model.run_id[:8], (model.checksum or "")[:12])
 
     with engine.begin() as conn:
         released = scans.release_stuck_jobs(conn, minutes=0)

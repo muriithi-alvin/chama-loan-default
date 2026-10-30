@@ -23,12 +23,12 @@ from chama.extraction.schema import LedgerPage, page_to_frames
 EXTRACTIONS_DIR = PROJECT_ROOT / "data" / "interim" / "extractions"
 
 
-def read_photo(path: Path, settings: dict, extractor) -> Extraction:
+def read_photo(path: Path, settings: dict, extractor, notes: str = "") -> Extraction:
     try:
         jpeg = prepare_image(path.read_bytes(), settings["max_image_edge_px"], settings["jpeg_quality"])
     except UnusableImage as e:
         raise StepFailed(f"{path.name}: {e}") from e
-    return extractor.extract(jpeg)
+    return extractor.extract(jpeg, notes) if notes else extractor.extract(jpeg)
 
 
 def save_extraction(extraction: Extraction, path: Path) -> None:
