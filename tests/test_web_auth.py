@@ -63,9 +63,10 @@ class FakeSupabase:
 
 
 @pytest.fixture
-def client(monkeypatch):
+def client(monkeypatch, tmp_path):
     monkeypatch.setenv("COOKIE_SECURE", "false")
     monkeypatch.setenv("DEMO_MODE", "false")
+    monkeypatch.setenv("WEB_LOG_DIR", str(tmp_path))
     web_settings.cache_clear()
     store = FakeStore()
     for name in ("by_email", "link_identity", "start_session", "session", "end_session"):
