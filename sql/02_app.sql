@@ -183,6 +183,10 @@ CREATE TABLE IF NOT EXISTS app.risk_scores (
     CONSTRAINT one_score_per_member_meeting_run UNIQUE (chama_id, member_code, page_no, model_run_id)
 );
 CREATE INDEX IF NOT EXISTS risk_scores_meeting ON app.risk_scores (chama_id, page_no);
+-- S-8: the registered model version and a SHA-256 of its files, so each colour
+-- can be traced to the exact model that gave it (D-030).
+ALTER TABLE app.risk_scores ADD COLUMN IF NOT EXISTS model_version TEXT;
+ALTER TABLE app.risk_scores ADD COLUMN IF NOT EXISTS model_checksum TEXT;
 
 -- The worker's heartbeat, for the health check: the model it loaded and when
 -- it was last seen.
