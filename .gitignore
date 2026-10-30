@@ -3,6 +3,7 @@ data/photos/*
 data/raw/*
 data/interim/*
 data/processed/*
+data/reports/*
 !data/**/.gitkeep
 *.xlsx
 *.xls
