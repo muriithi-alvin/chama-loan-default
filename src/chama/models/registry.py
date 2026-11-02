@@ -9,11 +9,17 @@ checksum of the model's files: anyone can check later which exact model
 gave a colour.
 
 The registry lives beside the runs (`mlruns/models/`, on Drive when
-DRIVE_DIR is set), as plain files like the rest of MLflow here (D-019).
+DRIVE_DIR is set), as plain files like the rest of MLflow here (D-019). The
+cloud release cannot reach Drive: `export_bundle` copies the champion's files
+and its details into a folder, and `load_bundle` loads such a folder only if
+the files still match the checksum (D-032).
 """
 from __future__ import annotations
 
 import hashlib
+import json
+import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -94,3 +100,38 @@ def load_champion(target_name: str = "missed_repayment", config: dict | None = N
         cutoffs={"medium": float(metrics["band_cutoff_medium"]), "high": float(metrics["band_cutoff_high"])},
         checksum=files_checksum(folder),
     )
+
+
+def export_bundle(folder: Path, target_name: str = "missed_repayment", config: dict | None = None,
+                  tracking_dir: Path | None = None) -> Champion:
+    """Copy the champion's files to folder/files and its details to folder/champion.json."""
+    config = config or load_config()
+    champion = load_champion(target_name, config, tracking_dir)
+    mlflow = _mlflow(config, target_name, tracking_dir)
+    folder = Path(folder)
+    if (folder / "files").exists():
+        shutil.rmtree(folder / "files")
+    with tempfile.TemporaryDirectory() as tmp:
+        local = Path(mlflow.artifacts.download_artifacts(f"models:/{champion.name}@{ALIAS}", dst_path=tmp))
+        shutil.copytree(local, folder / "files")
+    if files_checksum(folder / "files") != champion.checksum:
+        raise StepFailed("The exported model files do not match the registered model's checksum.")
+    details = {"name": champion.name, "alias": ALIAS, "version": champion.version, "run_id": champion.run_id,
+               "model_name": champion.model_name, "cutoffs": champion.cutoffs, "checksum": champion.checksum}
+    (folder / "champion.json").write_text(json.dumps(details, indent=1), encoding="utf-8")
+    return champion
+
+
+def load_bundle(folder: Path) -> Champion:
+    """A model exported by export_bundle, refused if its files were changed."""
+    import mlflow
+
+    folder = Path(folder)
+    details = json.loads((folder / "champion.json").read_text(encoding="utf-8"))
+    checksum = files_checksum(folder / "files")
+    if checksum != details["checksum"]:
+        raise StepFailed(f"The model files in {folder} do not match their checksum; export the model again.")
+    return Champion(name=details["name"], version=str(details["version"]), run_id=details["run_id"],
+                    model_name=details["model_name"], model=mlflow.sklearn.load_model(str(folder / "files")),
+                    cutoffs=details["cutoffs"], checksum=checksum)
+

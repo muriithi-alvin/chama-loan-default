@@ -47,6 +47,16 @@ def test_the_checksum_is_the_same_each_time_and_changes_with_the_model(tracking,
     assert registry.files_checksum(tmp_path / "copy") != first
 
 
+def test_the_exported_copy_loads_with_the_same_checksum(tracking, tmp_path):
+    folder, config, run_id = tracking
+    registry.register("missed_repayment", config, folder)
+    exported = registry.export_bundle(tmp_path / "bundle", "missed_repayment", config, folder)
+    loaded = registry.load_bundle(tmp_path / "bundle")
+    assert loaded.checksum == exported.checksum and loaded.run_id == run_id
+    assert loaded.cutoffs == {"medium": 0.2, "high": 0.4}
+    assert loaded.model.predict([[1.0]])[0] == 1
+
+
 def test_scoring_without_a_registered_model_says_what_to_run(tracking):
     folder, config, _ = tracking
     with pytest.raises(StepFailed, match="register-model"):

@@ -16,6 +16,8 @@ Usage:
     python -m chama.pipeline score             # 7. early-warning bands and reasons for the web pages
     python -m chama.pipeline evaluate-chama    #    test the model on a test-only chama (MLflow)
     python -m chama.pipeline drift             #    recent records vs the training data (Evidently)
+    python -m chama.pipeline deploy-bundle     #    demo chama + model for the cloud release (checked for real names)
+    python -m chama.pipeline deploy-publish    #    bundle -> private dataset; settings and build -> Hugging Face Space
     python -m chama.pipeline demo-chama        #    chama B's pages with fictional names, for demos
     python -m chama.pipeline web-user add ...  #    accounts for the web interface (also list, deactivate)
     python -m chama.pipeline web-stats         #    page times from the web server's request log
@@ -30,7 +32,7 @@ from pathlib import Path
 import click
 
 from chama import StepFailed
-from chama.config import load_config, pseudonym_key, shown_path
+from chama.config import load_config, pseudonym_key, shown_path, use_cloud_settings
 from chama.db import get_engine
 
 
@@ -92,8 +94,12 @@ def run_all(config: dict, engine) -> None:
 
 
 @click.group()
-def cli() -> None:
+@click.option("--cloud", is_flag=True,
+              help="Use the cloud release's database for this command (CLOUD_* in .env, D-032).")
+def cli(cloud: bool) -> None:
     """Chama data pipeline. Run `all`, or the steps in order; each can be re-run."""
+    if cloud:
+        _run(use_cloud_settings)
 
 
 @cli.command("all")
@@ -378,6 +384,58 @@ def drift(chama_id: str, months: int) -> None:
         print(f"Report: {result['html']}  (also in MLflow, experiment chama-missed-repayment-drift)")
 
     _run(go)
+
+
+@cli.command("deploy-bundle")
+def deploy_bundle() -> None:
+    """Write the cloud release's private bundle to data/deploy/bundle (D-032).
+
+    The demo chama's typed pages and names and the champion model, checked
+    for every word of every real member's name first. Upload the folder to the
+    private Hugging Face dataset named in docs/deployment.md.
+    """
+    import json
+
+    from chama.deploy import build
+
+    def go() -> None:
+        out = build(load_config())
+        m = json.loads((out / "MANIFEST.json").read_text(encoding="utf-8"))
+        print(f"Bundle written to {shown_path(out)}: {len(m['files'])} files, model version "
+              f"{m['model']['version']} (checksum {m['model']['checksum'][:12]}), checked against "
+              f"{m['checked_against_real_names']} real names.")
+
+    _run(go)
+
+
+@cli.command("deploy-publish")
+@click.option("--ref", default="main", show_default=True, help="The Git branch the image is built from.")
+@click.option("--rebuild", is_flag=True, help="Rebuild the image, for example after pushing new code.")
+def deploy_publish(ref: str, rebuild: bool) -> None:
+    """Publish the release to Hugging Face from the settings in .env (D-032).
+
+    Uploads data/deploy/bundle to a private dataset, sets up the public Space
+    with its variables and secrets, and uploads the Dockerfile, which starts
+    the build. Safe to run again. Needs HF_TOKEN and the other settings listed
+    in docs/deployment.md.
+    """
+    from chama.deploy import publish
+
+    def go() -> None:
+        address = publish(ref, rebuild)
+        print(f"Published. Build log: the Space's Logs tab. The site will open at {address}")
+        print(f"Ready when {address}/api/health says ready.")
+
+    _run(go)
+
+
+@cli.command("first-start", hidden=True)
+def first_start() -> None:
+    """Load and score the demo chama into an empty database: at the cloud
+    release's start-up, or from the laptop with --cloud (D-032)."""
+    from chama.deploy import first_start as start
+
+    _run(lambda: start(load_config(), get_engine()))
 
 
 @cli.command("demo-chama")

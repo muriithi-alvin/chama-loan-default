@@ -10,5 +10,6 @@ chama:
       user: "{{ env_var('POSTGRES_USER') }}"
       password: "{{ env_var('POSTGRES_PASSWORD') }}"
       dbname: "{{ env_var('POSTGRES_DB') }}"
+      sslmode: "{{ env_var('POSTGRES_SSLMODE', 'prefer') }}"
       schema: analytics
       threads: 4

@@ -4,6 +4,7 @@ data/raw/*
 data/interim/*
 data/processed/*
 data/reports/*
+data/deploy/*
 !data/**/.gitkeep
 *.xlsx
 *.xls

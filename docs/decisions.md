@@ -666,3 +666,31 @@ is expected and is read beside the behaviour inputs (recent misses,
 repayment ratios), whose drift is the real signal. The first report (30 Oct
 2026) found 11 of 17 inputs drifted in chama B's last 12 months, in line with
 missed repayments becoming more common in 2024 and 2025.
+
+## D-032 The HTTPS release runs the demo chama on Hugging Face and Supabase
+**Context.** Sprint III asks for a deployed HTTPS release that real users can
+try. The course suggests Cloudflare, AWS ECS Express Mode or Hugging Face; the
+project uses free services where it can, and real members' records must not
+leave the laptop beyond what the officials agreed (D-016).
+**Decision.** A public Hugging Face Docker Space (free CPU) runs the pages,
+API and worker in one container, with Supabase's free PostgreSQL (the project
+that already handles sign-in) as the database. It holds only the demo chama
+(`CHAMA_ONLY=chama_demo`). The Space contains only a Dockerfile and README:
+the image clones the private GitHub repository and fetches a private
+Hugging Face dataset with the demo chama's typed pages, its fictional names
+and the champion model, both with read-only build secrets. That bundle is
+made by `deploy-bundle`, which refuses any file holding a word of a real
+member's name; the model is an exported copy of the registered champion,
+loaded only if its files match the checksum. The release uses its own
+pseudonym key and an encrypted database connection.
+**Consequences.** Real chamas, their names and photos never reach the cloud.
+The model file and its small input example (17 inputs for a few rows: ratios
+and counts, no codes or dates) are stored in the private dataset. The free
+tiers sleep when unused and the container's disk is not kept, so scanned
+pages made in the release last until its next restart (docs/deployment.md).
+The image installs the exact library versions of the project environment
+(`deploy/huggingface/constraints.txt`), because the model was saved under
+them. `deploy-publish` sets up the dataset and Space from `.env`, and
+`--cloud` points one command at the release's database. The start-up was
+rehearsed on 2 Nov 2026 with the cloud settings on an empty local database;
+the image itself is first built on Hugging Face.

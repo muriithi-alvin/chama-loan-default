@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 from sqlalchemy import text
@@ -38,9 +39,14 @@ class LoadedModel:
 
     @classmethod
     def load(cls, config: dict) -> LoadedModel:
-        from chama.models.registry import load_champion
+        """From the registry by alias; in the cloud release, from the exported
+        copy named by MODEL_BUNDLE, checked against its checksum (D-032)."""
+        import os
 
-        champion = load_champion(TARGET, config)
+        from chama.models.registry import load_bundle, load_champion
+
+        bundle = os.getenv("MODEL_BUNDLE", "").strip()
+        champion = load_bundle(Path(bundle)) if bundle else load_champion(TARGET, config)
         return cls(run_id=champion.run_id, model_name=champion.model_name, model=champion.model,
                    cutoffs=champion.cutoffs, version=champion.version, checksum=champion.checksum)
 

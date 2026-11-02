@@ -25,6 +25,8 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 - **Simpler member page:** loans running first, past loans folded away.
 - **Fixed:** the About page's scroll story no longer mismatches the server's
   HTML for readers who prefer reduced motion.
+- **Fixed:** a database password holding `@` or `/` no longer breaks the
+  connection address.
 
 ### Added — Sprint III
 
@@ -39,6 +41,15 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 - **Data drift report (S-7, D-031):** `drift --chama <id> --months 12` compares
   the model's 17 inputs in recent meetings with the rows it learned from, with
   Evidently; the HTML report goes to `data/reports/drift/` and MLflow.
+- **HTTPS release (D-032):** `deploy/huggingface/` (Dockerfile, start script,
+  Space README) and `docs/deployment.md`; `deploy-bundle` writes the private
+  bundle (demo chama and champion model, checked for real names);
+  `deploy-publish` sets up the private dataset and the Space from `.env`;
+  `--cloud` points one command at the release's database; the image installs
+  the project's exact library versions (`constraints.txt`);
+  `CHAMA_ONLY`, `POSTGRES_SSLMODE` and `MODEL_BUNDLE` settings for the cloud.
+- **Sprint III records:** `docs/traceability.md` (objectives to requirements to
+  tests) and `docs/usability_test.md` (tasks, questionnaire, record sheet).
 
 ### Added — Kibaba, the web interface (D-026, D-027, D-028)
 
