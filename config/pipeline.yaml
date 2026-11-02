@@ -3,12 +3,35 @@
 # The loader reads every .xlsx in the folder and combines them.
 # `name` is shown on the web pages. A chama with `demo: true` is a copy with
 # fictional names for demonstrations (D-028): built by `demo-chama`, shown
-# with its own names, and never exported for training.
+# with its own names, and never exported for training. A chama with
+# `test_only: true` is kept back to test the model (D-029): also never
+# exported for training. `reading_notes` are added to the reading
+# instructions for that chama's scans only, when its book has its own columns.
 chamas:
-  - id: chama_a          # the first Chama (records from 2023; no data yet, D-014)
+  - id: chama_a          # the first Chama (records from 2023)
     name: Chama A
     raw_dir: data/raw/chama_a
     photos_dir: data/photos/chama_a
+    # Kept back to test the model on a chama it never learned from (D-029):
+    # never exported for training; `evaluate-chama chama_a` scores it with the
+    # model trained on chama B.
+    test_only: true
+    # Chama A's book has its own columns (D-029). Added to the reading
+    # instructions for this chama's scans only; chama B's are unchanged.
+    reading_notes: |
+      Columns, left to right: number, name, Monthly, Welfare (or W/F), Outstanding loan,
+      Repayment, Interest, Loan balance, Other payments. Some pages have no Loan balance column.
+      - Monthly goes in monthly. Outstanding loan goes in loan_before, Repayment in repayment,
+        Interest in interest and Loan balance in loan_after.
+      - Welfare and Other payments are not loan columns: write them in remarks, for example
+        "Welfare 500; Other payments 2000".
+      - An amount written in the left margin beside a name goes in remarks as "margin 3,100".
+      - A note written instead of an amount in the Repayment column (such as "Paid in advance"
+        or "Paid in Sept") goes in remarks word for word, and repayment stays empty.
+      - The month or date at the top of the page (for example "JUNE '26" or "12/4/2026") goes in
+        meeting_date as written.
+      - Loans given at the meeting are listed below the table; a due date written beside a loan
+        goes in that loan's remarks.
   - id: chama_b          # the second Chama (records from 2014)
     name: Chama B
     raw_dir: data/raw/chama_b

@@ -2,6 +2,7 @@
 is used and no API call is made."""
 import io
 import json
+import ssl
 from types import SimpleNamespace
 
 import httpx
@@ -16,8 +17,11 @@ from chama.extraction.extractor import (
     ExtractionFailed,
     OpenAICompatibleExtractor,
     make_extractor,
+    tls_context,
+    user_text,
 )
 from chama.extraction.images import UnusableImage, prepare_image
+from chama.extraction.prompt import USER_PROMPT
 from chama.extraction.schema import PAGE_TABLES, LedgerPage, page_schema, page_to_frames
 from chama.ingestion.raw_format import SHEETS, expected_columns
 
@@ -249,6 +253,28 @@ def test_a_missing_key_is_named(monkeypatch):
     monkeypatch.delenv("TEST_EXTRACTION_KEY", raising=False)
     with pytest.raises(ExtractionFailed, match="TEST_EXTRACTION_KEY is missing"):
         OpenAICompatibleExtractor(GROQ, openai_client()).extract(b"jpeg")
+
+
+def test_a_chama_without_reading_notes_gets_the_usual_instructions():
+    assert user_text() == USER_PROMPT
+    assert user_text("  ") == USER_PROMPT
+
+
+def test_reading_notes_are_sent_after_the_usual_instructions(monkeypatch):
+    monkeypatch.setenv("TEST_EXTRACTION_KEY", "secret")
+    sent = []
+    content = page([statement("A", "1,000", "", "", "1,000")]).model_dump_json()
+    OpenAICompatibleExtractor(GROQ, openai_client(content=content, sent=sent)).extract(
+        b"jpeg", "Welfare goes in remarks.")
+    text = json.loads(sent[0].content)["messages"][1]["content"][0]["text"]
+    assert text.startswith(USER_PROMPT)
+    assert text.endswith("Notes about this chama's book:\nWelfare goes in remarks.")
+
+
+def test_the_smaller_handshake_still_checks_certificates():
+    context = tls_context()
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert context.check_hostname
 
 
 def test_layout_schema_is_written_out_in_full_with_closed_objects():

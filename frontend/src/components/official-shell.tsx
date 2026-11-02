@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  BookOpen, Camera, ClipboardList, History, Info, LayoutGrid, MoreHorizontal, PenLine, Users, X,
+  BookOpen, Camera, ClipboardList, History, Info, LayoutGrid, MoreHorizontal, PenLine, Users, X, type LucideIcon,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
@@ -14,15 +14,21 @@ import { Bead, Logo } from "./beads";
 import { Meeting } from "./figurines";
 import { SignOutButton } from "./sign-out";
 
-const PAGES = [
+type Page = { href: string; label: string; icon: LucideIcon; exact?: boolean };
+
+// The four pages officials use every month, then the quieter ones.
+const MAIN: Page[] = [
   { href: "/o", label: "Overview", icon: LayoutGrid, exact: true },
   { href: "/o/members", label: "Members", icon: Users },
-  { href: "/o/records/meetings", label: "Records", icon: BookOpen },
   { href: "/o/scan", label: "Scan a page", icon: Camera },
+  { href: "/o/records/meetings", label: "Records", icon: BookOpen },
+];
+const MORE: Page[] = [
+  { href: "/o/about", label: "How Kibaba decides", icon: Info },
   { href: "/o/uploads", label: "Upload history", icon: History },
   { href: "/o/edits", label: "Edit record", icon: PenLine },
-  { href: "/o/about", label: "About the scores", icon: Info },
 ];
+const PAGES = [...MAIN, ...MORE];
 
 function isActive(path: string, href: string, exact?: boolean) {
   if (exact) return path === href;
@@ -43,9 +49,36 @@ function Avatar({ name, size = 40 }: { name: string; size?: number }) {
   );
 }
 
+function SideList({ pages, path, big = false }: { pages: Page[]; path: string; big?: boolean }) {
+  return (
+    <ul className={`flex flex-col gap-1 ${big ? "text-[17px]" : "text-[15px]"}`}>
+      {pages.map((p) => {
+        const active = isActive(path, p.href, p.exact);
+        return (
+          <li key={p.href} className="relative">
+            {active && (
+              <motion.span layoutId="side-active" aria-hidden="true"
+                className="absolute inset-0 rounded-button bg-white/[0.12]"
+                transition={{ type: "spring", stiffness: 500, damping: 40 }} />
+            )}
+            <Link href={p.href} aria-current={active ? "page" : undefined}
+              className={`relative flex items-center gap-3 rounded-button px-3 no-underline ${big ? "min-h-12" : "min-h-10"} ${
+                active ? "font-bold text-white hover:text-white" : "text-side-text hover:bg-white/[0.06] hover:text-white"
+              }`}>
+              {active ? <Bead colour="sun" size={12} /> : <Bead colour="empty" size={12} />}
+              {p.label}
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function Sidebar({ me, path }: { me: Me; path: string }) {
   return (
-    <nav aria-label="Officials" className="on-dark sticky top-0 hidden h-dvh w-[264px] shrink-0 flex-col gap-7 overflow-y-auto bg-ink px-[18px] pb-6 pt-7 text-white lg:flex">
+    <nav aria-label="Officials" className="on-dark sticky top-0 hidden h-dvh w-[264px] shrink-0 flex-col gap-6 overflow-y-auto bg-ink px-[18px] pb-6 pt-9 text-white lg:flex">
+      <div aria-hidden="true" className="bead-edge absolute inset-x-0 top-0 !mb-0 opacity-90" />
       <Link href="/o" className="flex items-center gap-3 px-2 text-white no-underline hover:text-white">
         <Logo size={40} onDark />
         <span className="flex flex-col">
@@ -57,32 +90,16 @@ function Sidebar({ me, path }: { me: Me; path: string }) {
         <span className="text-[13px] text-side-muted">Your chama</span>
         <span className="text-[16px] font-bold text-cream">{me.user.chama_name}</span>
       </div>
-      <ul className="flex flex-col gap-1 text-[16px]">
-        {PAGES.map((p) => {
-          const active = isActive(path, p.href, p.exact);
-          return (
-            <li key={p.href} className="relative">
-              {active && (
-                <motion.span layoutId="side-active" aria-hidden="true"
-                  className="absolute inset-0 rounded-button bg-white/[0.12]"
-                  transition={{ type: "spring", stiffness: 500, damping: 40 }} />
-              )}
-              <Link href={p.href} aria-current={active ? "page" : undefined}
-                className={`relative flex min-h-11 items-center gap-3 rounded-button px-3 no-underline ${
-                  active ? "font-bold text-white hover:text-white" : "text-side-text hover:bg-white/[0.06] hover:text-white"
-                }`}>
-                {active ? <Bead colour="sun" size={12} /> : <Bead colour="empty" size={12} />}
-                {p.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+      <SideList pages={MAIN} path={path} big />
+      <div className="flex flex-col gap-2">
+        <span className="px-3 text-[13px] font-bold uppercase tracking-wide text-side-muted">More</span>
+        <SideList pages={MORE} path={path} />
+      </div>
       <Meeting tone="light" className="mt-auto w-[200px] self-center opacity-40" />
       <div className="flex items-center gap-3 border-t border-white/[0.14] px-2.5 pt-3.5">
         <Avatar name={me.user.name} />
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-[15px] font-bold">{me.user.name}</span>
+          <span className="text-[15px] font-bold leading-tight">{me.user.name}</span>
           <span className="text-[13px] capitalize text-side-muted">{me.user.position ?? me.user.role}</span>
         </span>
         <SignOutButton onDark />

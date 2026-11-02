@@ -38,7 +38,7 @@ def scores_at(conn: Connection, chama_id: str, page_no: int) -> list[dict]:
     """The newest score of each member for one meeting."""
     return _rows(conn, """
         SELECT DISTINCT ON (member_code) member_code, page_no, meeting_month, meeting_date, band,
-               reasons, model_run_id, model_name, scored_at
+               reasons, model_run_id, model_name, model_version, model_checksum, scored_at
         FROM app.risk_scores WHERE chama_id = :c AND page_no = :p
         ORDER BY member_code, scored_at DESC
     """, c=chama_id, p=page_no)

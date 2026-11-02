@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import os
+import ssl
 import time
 from dataclasses import dataclass
 
@@ -54,6 +55,27 @@ def _base64(jpeg: bytes) -> str:
     return base64.standard_b64encode(jpeg).decode("ascii")
 
 
+def user_text(notes: str = "") -> str:
+    """The usual instructions, plus notes about one chama's book when it has its
+    own layout (`reading_notes` in config/pipeline.yaml). Chama B has none, so its
+    pages are read exactly as before."""
+    notes = notes.strip()
+    return f"{USER_PROMPT}\n\nNotes about this chama's book:\n{notes}" if notes else USER_PROMPT
+
+
+def tls_context() -> ssl.SSLContext:
+    """TLS with the usual certificate checks, offering only the X25519 key exchange.
+
+    OpenSSL 3.5 also offers a post-quantum key share by default, which makes
+    the first handshake message bigger than one network packet. Some networks
+    drop it on the way to Groq: from 24 Oct 2026 every read timed out here,
+    while curl, which offers X25519, still connected.
+    """
+    context = ssl.create_default_context()
+    context.set_ecdh_curve("X25519")
+    return context
+
+
 class OpenAICompatibleExtractor:
     """A provider with an OpenAI-style chat completions API, such as Groq.
 
@@ -72,10 +94,10 @@ class OpenAICompatibleExtractor:
     @property
     def client(self) -> httpx.Client:
         if self._client is None:
-            self._client = httpx.Client(timeout=180)
+            self._client = httpx.Client(timeout=180, verify=tls_context())
         return self._client
 
-    def extract(self, jpeg: bytes) -> Extraction:
+    def extract(self, jpeg: bytes, notes: str = "") -> Extraction:
         key = os.getenv(self.api_key_env, "").strip()
         if not key:
             raise ExtractionFailed(f"{self.api_key_env} is missing from .env.")
@@ -86,7 +108,7 @@ class OpenAICompatibleExtractor:
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": [
-                    {"type": "text", "text": USER_PROMPT},
+                    {"type": "text", "text": user_text(notes)},
                     {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + _base64(jpeg)}},
                 ]},
             ],
@@ -165,7 +187,7 @@ class ClaudeExtractor:
                 raise ExtractionFailed("ANTHROPIC_API_KEY is missing from .env.") from e
         return self._client
 
-    def extract(self, jpeg: bytes) -> Extraction:
+    def extract(self, jpeg: bytes, notes: str = "") -> Extraction:
         start = time.perf_counter()
         image = {
             "type": "image",
@@ -176,7 +198,7 @@ class ClaudeExtractor:
                 model=self.model,
                 max_tokens=self.max_tokens,
                 system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": [image, {"type": "text", "text": USER_PROMPT}]}],
+                messages=[{"role": "user", "content": [image, {"type": "text", "text": user_text(notes)}]}],
                 output_format=LedgerPage,
                 output_config={"effort": self.effort},
                 # If the model declines, the API retries on its recommended fallback model.

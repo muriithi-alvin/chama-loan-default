@@ -31,6 +31,8 @@ export interface ScoreSource {
   meeting_date: string | null;
   model_run_id: string;
   model_label: string;
+  model_version: string | null;
+  model_checksum: string | null;
   scored_at: string;
 }
 

@@ -64,7 +64,7 @@ export function ScanStatus({ id }: { id: number }) {
           <p className="text-[16px] text-muted">
             {WORKING.has(data.status)
               ? `Started ${elapsed} s ago. A page usually takes under a minute.`
-              : data.seconds ? `The model took ${data.seconds.toFixed(0)} s to read the page${data.model ? ` (${data.model})` : ""}.` : null}
+              : data.seconds ? `Read in ${data.seconds.toFixed(0)} seconds.` : null}
           </p>
         </div>
         <BeadThread state={state} steps={["Queued", "Reading", state === "failed" ? "Failed" : "Ready for review"]} />
@@ -94,7 +94,7 @@ export function ScanStatus({ id }: { id: number }) {
         )}
         {data.status === "accepted" && data.run_id && (
           <Link href={`/o/runs/${data.run_id}`} className="inline-flex min-h-14 items-center gap-2 rounded-button bg-cobalt px-6 text-[18px] font-bold text-white no-underline hover:bg-cobalt-dark hover:text-white">
-            See the pipeline run <ArrowRight aria-hidden="true" size={20} />
+            See the records being updated <ArrowRight aria-hidden="true" size={20} />
           </Link>
         )}
         {data.status === "discarded" && (

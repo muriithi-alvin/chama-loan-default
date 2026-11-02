@@ -106,6 +106,10 @@ Each raw file has four sheets that mirror the ledger: **Statements**, **Meetings
 - [docs/milestone_2_report.md](docs/milestone_2_report.md) — Milestone 2: targets, features, models, tests, results, the chosen model and all commands
 - [docs/web_setup.md](docs/web_setup.md) — Milestone 4: setting up sign-in, the demo chama, accounts, and running Kibaba, the web interface
 - [docs/m4_master_prompt.md](docs/m4_master_prompt.md) — Milestone 4: the pages, roles and rules the web interface is built to
+- [docs/deployment.md](docs/deployment.md) — the HTTPS release on Hugging Face and Supabase (demo chama only)
+- [docs/m4_test_record.md](docs/m4_test_record.md) — scenarios T1 to T10: automated tests and manual checks
+- [docs/traceability.md](docs/traceability.md) — from each objective to its requirements and tests
+- [docs/usability_test.md](docs/usability_test.md) — the usability test with officials and members
 - [CHANGELOG.md](CHANGELOG.md) — every change, newest first
 - [docs/decisions.md](docs/decisions.md) — design decisions and why
 - [docs/git_workflow.md](docs/git_workflow.md) — branches and how to push and merge

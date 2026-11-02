@@ -604,3 +604,93 @@ when presenting. This replaces the banner in the master prompt's G5.
 **Consequences.** `export` leaves demo chamas out, so models are never
 trained on chama B's rows twice. No fictional name shares a word with a real
 member's name.
+
+## D-029 Chama B trains the model; chama A is kept back to test it
+**Context.** Every result so far came from inside one chama (walk forward by
+year). Chama A's officials gave permission (photos to Groq, coded data to
+Google Drive) and photos of its book from 2023, so the model can be tested on
+a chama it never learned from. Chama A's book differs from chama B's: 21
+members, Welfare and Other payments columns, a page without a Loan balance
+column, amounts in the margin, notes such as "Paid in advance" instead of an
+amount, and loans due in 12 or 24 months.
+**Decision.** Chama B stays the only training chama. Chama A is marked
+`test_only: true` in `config/pipeline.yaml`: its pages go through the same
+web scan, review and pipeline as any chama, but `export` leaves it out of the
+modelling tables, so training never sees it. `python -m chama.pipeline
+evaluate-chama chama_a` scores every chama A meeting with a known outcome
+using the chosen model trained on chama B, and logs the same metrics as the
+walk-forward test (PR AUC, ROC AUC with 95% intervals, how often each band
+missed) to the MLflow experiment `chama-missed-repayment-held-out`. Chama A's
+layout is handled by `reading_notes` added to the reading instructions for
+its scans only; chama B's instructions are unchanged. This follows the
+product approach agreed with Alvin: when a chama joins, the developers first
+tailor the product to its book (columns, money rules, what counts as a missed
+repayment) through settings, not copies of the code.
+**Consequences.** What counts as a missed repayment in chama A is confirmed
+with its officials before its result is reported. Chama A's real names stay
+on this computer like chama B's, and its pages are never shown on a projector.
+
+## D-030 The model is loaded from the MLflow registry by alias
+**Context.** Scoring found its model by searching runs for the chosen model
+and strategy in the latest training batch (D-023). Nothing recorded which
+exact file gave a colour, and changing the model meant retraining or editing
+settings. S-8 asks for the registry and a checksum with each score.
+**Decision.** `python -m chama.pipeline register-model` registers the chosen
+run's model as a new version of `chama-missed-repayment` in the MLflow model
+registry and moves the alias `champion` to it. Scoring and the worker load
+`models:/chama-missed-repayment@champion`, and every row of
+`app.risk_scores` records the version and a SHA-256 of the model's files.
+The registry is kept as plain files beside the runs, like the runs
+themselves (D-019). The member page shows the version and checksum under
+"Technical details".
+**Consequences.** Moving to a new model is two steps: train, then
+register-model, then restart the worker. Rolling back is moving the alias to
+an earlier version. Version 1 is the same run that scored before
+(random forest, run fc6ae3fe), so no colour changed.
+
+## D-031 Data drift is checked with Evidently, on demand
+**Context.** S-7 asks for data drift monitoring. The model learned from
+chama B's rows up to 2025; officials' pages now use it on newer meetings and,
+for the test, on chama A.
+**Decision.** `python -m chama.pipeline drift --chama <id> --months 12`
+compares each of the model's 17 inputs in a chama's recent meetings (all
+rows for a test-only chama) with the rows the model learned from, using
+Evidently's data drift preset (open source, with its usage telemetry turned
+off). The HTML report goes to `data/reports/drift/` and, with a table per
+input, to the MLflow experiment `chama-missed-repayment-drift`. It runs on
+demand, after a batch of new pages or before retraining, not on a schedule:
+a chama adds one page a month.
+**Consequences.** Inputs that only ever grow (months in the records, loans
+so far, the oldest loan's age) always show drift against earlier years; that
+is expected and is read beside the behaviour inputs (recent misses,
+repayment ratios), whose drift is the real signal. The first report (30 Oct
+2026) found 11 of 17 inputs drifted in chama B's last 12 months, in line with
+missed repayments becoming more common in 2024 and 2025.
+
+## D-032 The HTTPS release runs the demo chama on Hugging Face and Supabase
+**Context.** Sprint III asks for a deployed HTTPS release that real users can
+try. The course suggests Cloudflare, AWS ECS Express Mode or Hugging Face; the
+project uses free services where it can, and real members' records must not
+leave the laptop beyond what the officials agreed (D-016).
+**Decision.** A public Hugging Face Docker Space (free CPU) runs the pages,
+API and worker in one container, with Supabase's free PostgreSQL (the project
+that already handles sign-in) as the database. It holds only the demo chama
+(`CHAMA_ONLY=chama_demo`). The Space contains only a Dockerfile and README:
+the image clones the private GitHub repository and fetches a private
+Hugging Face dataset with the demo chama's typed pages, its fictional names
+and the champion model, both with read-only build secrets. That bundle is
+made by `deploy-bundle`, which refuses any file holding a word of a real
+member's name; the model is an exported copy of the registered champion,
+loaded only if its files match the checksum. The release uses its own
+pseudonym key and an encrypted database connection.
+**Consequences.** Real chamas, their names and photos never reach the cloud.
+The model file and its small input example (17 inputs for a few rows: ratios
+and counts, no codes or dates) are stored in the private dataset. The free
+tiers sleep when unused and the container's disk is not kept, so scanned
+pages made in the release last until its next restart (docs/deployment.md).
+The image installs the exact library versions of the project environment
+(`deploy/huggingface/constraints.txt`), because the model was saved under
+them. `deploy-publish` sets up the dataset and Space from `.env`, and
+`--cloud` points one command at the release's database. The start-up was
+rehearsed on 2 Nov 2026 with the cloud settings on an empty local database;
+the image itself is first built on Hugging Face.

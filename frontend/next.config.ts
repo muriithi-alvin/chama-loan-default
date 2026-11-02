@@ -14,6 +14,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // The cloud image runs Next's own small server (D-032); locally `next start`
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   reactStrictMode: true,
   // The dev server only serves its live-reload connection to pages opened at
   // localhost; opened at 127.0.0.1 a page showed but never came to life.

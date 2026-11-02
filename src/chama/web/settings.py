@@ -47,7 +47,8 @@ def web_settings() -> WebSettings:
         cookie_secure=_flag("COOKIE_SECURE", True),
         session_hours=int(os.getenv("SESSION_HOURS", "12")),
         allowed_origins=tuple(o.strip().rstrip("/") for o in origins.split(",") if o.strip()),
-        log_dir=PROJECT_ROOT / "data" / "logs",
+        # tests write to a folder of their own, so web-stats shows real use only
+        log_dir=Path(os.getenv("WEB_LOG_DIR", "").strip() or PROJECT_ROOT / "data" / "logs"),
     )
 
 

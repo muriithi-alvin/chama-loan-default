@@ -12,11 +12,11 @@ import { api, ApiProblem, fetcher } from "@/lib/client-api";
 import type { Run } from "@/lib/types";
 
 const STEP_LABEL: Record<string, { title: string; what: string }> = {
-  ingest: { title: "Ingest", what: "The page joins the chama's raw records" },
-  names: { title: "Names", what: "Each name is linked to its member" },
-  anonymise: { title: "Anonymise", what: "Names become codes for the analysis" },
-  checks: { title: "Data checks", what: "Records are cleaned, loans linked, every check run" },
-  score: { title: "Score", what: "Early-warning bands and reasons for the latest meeting" },
+  ingest: { title: "Saving the page", what: "The checked rows join the chama's records" },
+  names: { title: "Matching names", what: "Each name is linked to the right member" },
+  anonymise: { title: "Hiding names", what: "Names are swapped for codes before anything is worked out" },
+  checks: { title: "Updating the records", what: "Balances, loans and repayments are brought up to date and checked" },
+  score: { title: "Finding who to follow up", what: "Each member with a loan gets a colour and the reasons for it" },
 };
 
 function seconds(from: string | null, to: string | null): string | null {

@@ -157,7 +157,8 @@ def write(df: pd.DataFrame, out_dir: Path, config: dict,
 
 
 def read_table(engine, table: ExportTable, skip_chamas: tuple[str, ...] = ()) -> pd.DataFrame:
-    """The table, without the chamas in `skip_chamas` (the demo copies, D-028:
+    """The table, without the chamas in `skip_chamas` (see not_for_training;
+    for the demo copies, D-028:
     training on them would count chama B's rows twice)."""
     from sqlalchemy import bindparam, text
 
@@ -180,14 +181,21 @@ def read_table(engine, table: ExportTable, skip_chamas: tuple[str, ...] = ()) ->
     return df
 
 
+def not_for_training(config: dict) -> tuple[str, ...]:
+    """Chamas whose rows never reach the modelling tables: demo copies (D-028),
+    which would count chama B twice, and test-only chamas (D-029), kept back
+    to test the model on a chama it never learned from."""
+    return tuple(c["id"] for c in config["chamas"] if c.get("demo") or c.get("test_only"))
+
+
 def run(config: dict, engine, out_dir: Path | None = None) -> None:
     from chama.anonymisation.aliases import saved_aliases
 
     names = [n for a in saved_aliases(engine).values() for pair in a.items() for n in pair]
-    demo = tuple(c["id"] for c in config["chamas"] if c.get("demo"))
+    skip = not_for_training(config)
     frames = {}
     for table in TABLES.values():   # check every table before writing any
-        df = read_table(engine, table, skip_chamas=demo)
+        df = read_table(engine, table, skip_chamas=skip)
         check_columns(df, table)
         check_no_names(df, names, table.name)
         frames[table.name] = df

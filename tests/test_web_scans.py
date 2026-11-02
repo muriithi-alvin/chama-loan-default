@@ -64,6 +64,18 @@ def test_name_suggestions_come_from_the_chamas_members():
     assert scans.suggestions("xyz", members) == []
 
 
+def test_accept_waits_until_every_name_is_matched(monkeypatch):
+    monkeypatch.setattr(scans.scans, "last_meeting_month", lambda conn, chama: date(2026, 4, 1))
+    upload = {"chama_id": "chama_demo"}
+    rows = [{"tbl": "meetings", "cells": {"meeting_date": "3/5/2026"}},
+            {"tbl": "statements", "cells": {"member_name": "Kawira Mutembel"}}]
+    new_name = [{"raw": "kawira mutembel", "member": None, "is_new": False}]
+    problems = scans.accept_problems(None, upload, rows, new_name)
+    assert [p["field"] for p in problems] == ["names"]
+    matched = [{"raw": "kawira mutembel", "member": "Kawira Mutembei", "is_new": False}]
+    assert scans.accept_problems(None, upload, rows, matched) == []
+
+
 @pytest.mark.parametrize("content_type, data, code", [
     ("application/pdf", b"%PDF", "file_type"),
     ("image/jpeg", b"", "file_empty"),

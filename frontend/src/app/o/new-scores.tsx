@@ -39,14 +39,14 @@ export function NewScores({ data }: { data: Overview }) {
             <span className="flex items-center gap-3.5 text-[17px]">
               <span aria-hidden="true" className="bead bead-cobalt bead-pulse" style={{ width: 16, height: 16 }} />
               <span>
-                <strong>New scores are ready.</strong>{" "}
-                {latest?.page_no ? `Ledger page ${latest.page_no} was scored ${ago(latest.scored_at!)}.` : null}
+                <strong>New results are ready.</strong>{" "}
+                {latest?.page_no ? `Ledger page ${latest.page_no} was checked ${ago(latest.scored_at!)}.` : null}
               </span>
             </span>
             <button type="button"
               onClick={() => startTransition(() => { setUpdated(true); router.refresh(); })}
               className="min-h-12 rounded-button bg-cobalt px-5 text-[16px] font-bold text-white hover:bg-cobalt-dark">
-              Show new scores
+              Show them
             </button>
           </motion.div>
         )}
@@ -56,9 +56,9 @@ export function NewScores({ data }: { data: Overview }) {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#135C30" strokeWidth="2.6"
               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
             <span>
-              <strong>Showing the newest scores.</strong>{" "}
+              <strong>Showing the newest results.</strong>{" "}
               {moved.length === 0
-                ? "No member changed band."
+                ? "Nobody changed colour."
                 : moved.map((m) => `${m.name} moved from ${BAND[m.moved_from!].label} to ${BAND[m.band].label}.`).join(" ")}
             </span>
           </motion.div>

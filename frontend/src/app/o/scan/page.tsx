@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Scan a page" };
 export default function ScanPage() {
   return (
     <PageBody className="max-w-[960px]">
-      <PageHeader title="Scan a page" sub="Photograph this month's ledger page. You will check every row before it is saved." />
+      <PageHeader title="Scan a page" tone="ice" sub="Photograph this month's ledger page. You will check every row before it is saved." />
       <ScanForm />
     </PageBody>
   );

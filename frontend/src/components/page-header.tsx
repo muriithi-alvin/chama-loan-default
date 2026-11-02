@@ -1,23 +1,32 @@
-import { BeadRow } from "./beads";
+import { BeadArc } from "./beads";
 
-/** Page title, an optional line under it, the bead row, and room for an action. */
-export function PageHeader({ title, sub, action, crumbs }: {
+const HEADER_TONES = { cream: "bg-cream", ice: "bg-ice" } as const;
+
+/** Page title in a colour block with a bead-collar corner and a beaded edge,
+ * an optional line under it, room for an action and an optional figurine. */
+export function PageHeader({ title, sub, action, crumbs, tone = "cream", art }: {
   title: React.ReactNode;
   sub?: React.ReactNode;
   action?: React.ReactNode;
   crumbs?: React.ReactNode;
+  tone?: keyof typeof HEADER_TONES;
+  art?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {crumbs && <nav aria-label="Breadcrumb" className="text-[15px] text-muted">{crumbs}</nav>}
-      <header className="flex flex-wrap items-end justify-between gap-5">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-[40px] sm:text-[52px]">{title}</h1>
-          {sub && <p className="text-[17px] text-muted">{sub}</p>}
+      <header className={`relative overflow-hidden rounded-card px-6 pb-9 pt-7 sm:px-8 ${HEADER_TONES[tone]}`}>
+        <BeadArc className="pointer-events-none absolute -right-16 -top-20 h-[230px] w-[230px] sm:-right-10" />
+        {art && <div aria-hidden="true" className="pointer-events-none absolute bottom-4 right-[230px] hidden opacity-70 xl:block">{art}</div>}
+        <div className="relative flex flex-wrap items-end justify-between gap-5 pr-24 sm:pr-36">
+          <div className="flex max-w-[44em] flex-col gap-2">
+            <h1 className="text-[38px] sm:text-[50px]">{title}</h1>
+            {sub && <p className="text-[17px] text-subtle">{sub}</p>}
+          </div>
+          {action}
         </div>
-        {action}
+        <div aria-hidden="true" className="bead-edge absolute inset-x-0 bottom-0" />
       </header>
-      <BeadRow />
     </div>
   );
 }

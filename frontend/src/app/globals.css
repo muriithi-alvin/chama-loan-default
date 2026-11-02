@@ -140,6 +140,17 @@
     radial-gradient(circle, #f07f1a 4px, transparent 4.6px) 48px 0 / 60px 12px;
 }
 
+/* A beaded edge along the bottom of a page header: the bead row, repeated */
+.bead-edge {
+  height: 12px;
+  background: radial-gradient(circle, #d62839 4px, transparent 4.6px) 0 0 / 60px 12px repeat-x,
+    radial-gradient(circle, #2547a8 4px, transparent 4.6px) 12px 0 / 60px 12px repeat-x,
+    radial-gradient(circle, #f6c343 4px, transparent 4.6px) 24px 0 / 60px 12px repeat-x,
+    radial-gradient(circle, #187a42 4px, transparent 4.6px) 36px 0 / 60px 12px repeat-x,
+    radial-gradient(circle, #f07f1a 4px, transparent 4.6px) 48px 0 / 60px 12px repeat-x;
+  margin-bottom: 10px;
+}
+
 /* Wire figurines: single paths drawn as strings of beads. The beads travel for
    a few seconds when a page opens, then rest: an endless animation repaints
    the drawing on every frame for as long as the page is open. */
@@ -229,6 +240,21 @@
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Landing page sections rise into view as you scroll (browsers with view timelines) */
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: reveal linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 25%;
+  }
+}
+@keyframes reveal {
+  from {
+    opacity: 0;
+    translate: 0 28px;
+  }
 }
 
 /* A member page's header shrinks as you scroll (browsers with scroll timelines) */

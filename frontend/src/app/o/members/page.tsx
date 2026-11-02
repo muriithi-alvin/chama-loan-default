@@ -68,7 +68,8 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
   return (
     <PageBody>
       <PageHeader title="Members"
-        sub={scores ? `Bands from the meeting of ${meetingWhen(scores.meeting_date, scores.meeting_month)}, ledger page ${scores.page_no}` : "No scores yet"} />
+        tone="ice"
+        sub={scores ? `Colours from the meeting of ${meetingWhen(scores.meeting_date, scores.meeting_month)}, ledger page ${scores.page_no}` : "Nothing worked out yet"} />
       <MemberFilters band={band} q={params.q ?? ""} total={members.length} shown={rows.length} />
       <BandKey />
 
@@ -79,9 +80,9 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
             <thead>
               <tr>
                 {header("name", "Name")}
-                {header("band", "Band")}
-                {header("open_loans", "Open loans", true)}
-                {header("outstanding", "Outstanding", true)}
+                {header("band", "Colour")}
+                {header("open_loans", "Loans running", true)}
+                {header("outstanding", "Still to repay", true)}
                 {header("missed_last_3", "Missed in last 3 meetings", true)}
                 <th scope="col" className="border-b border-line px-3 py-2.5"><span className="sr-only">Open</span></th>
               </tr>
@@ -124,8 +125,8 @@ export default async function MembersPage({ searchParams }: { searchParams: Sear
                 {m.band ? <BandChip band={m.band} size="sm" /> : <NoLoanChip />}
               </span>
               <span className="grid grid-cols-3 gap-2 text-[14px] text-muted">
-                <span>Open loans<br /><strong className="tabular text-[16px] text-ink">{m.open_loans}</strong></span>
-                <span>Outstanding<br /><strong className="tabular text-[16px] text-ink">{m.outstanding ? money(m.outstanding) : "–"}</strong></span>
+                <span>Loans running<br /><strong className="tabular text-[16px] text-ink">{m.open_loans}</strong></span>
+                <span>Still to repay<br /><strong className="tabular text-[16px] text-ink">{m.outstanding ? money(m.outstanding) : "–"}</strong></span>
                 <span>Missed, last 3<br /><strong className="tabular text-[16px] text-ink">{m.missed_last_3 ?? "–"}</strong></span>
               </span>
             </Link>

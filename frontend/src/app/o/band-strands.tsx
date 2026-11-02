@@ -18,7 +18,7 @@ export function BandStrands({ data }: { data: Overview }) {
         {STRANDS.map((band) => {
           const beads = data.strand.filter((b) => b.band === band);
           return (
-            <div key={band} className="grid grid-cols-[116px_1fr] items-center gap-4 py-2.5 sm:grid-cols-[150px_1fr]">
+            <div key={band} className="grid grid-cols-1 items-center gap-2 py-2.5 sm:grid-cols-[200px_1fr] sm:gap-4">
               <div className="flex flex-col gap-0.5">
                 <BandChip band={band} />
                 <span className="text-[14px] text-muted">

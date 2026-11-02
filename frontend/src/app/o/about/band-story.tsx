@@ -1,9 +1,9 @@
 "use client";
 
 import { motion, useReducedMotion, useScroll, useTransform, type MotionValue } from "motion/react";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { BAND, EffectIcon } from "@/components/beads";
+import { BAND, EFFECT_TEXT, EffectIcon } from "@/components/beads";
 import type { Band } from "@/lib/types";
 
 // About the scores, the one scroll story (section 7): a collar of twenty beads
@@ -25,7 +25,7 @@ const EXAMPLE = [
 
 const STEPS = [
   "Each bead is one member with a loan running at a meeting.",
-  "The early warning puts them in order of how likely a missed repayment looks in the next 3 meetings: the top 20% are High, the next 30% Medium, the rest Low.",
+  "Kibaba puts them in order of how likely a missed repayment looks in the next 3 meetings: the top fifth are “Follow up now”, the next three in ten “Keep an eye on”, the rest “Less likely to miss”.",
   "Every bead comes with its reasons, from the member's own record.",
 ];
 
@@ -57,9 +57,9 @@ function Labels({ progress }: { progress: MotionValue<number> }) {
   return (
     <motion.div aria-hidden="true" style={{ opacity }} className="pointer-events-none absolute inset-0">
       {(["high", "medium", "low"] as Band[]).map((band) => (
-        <span key={band} className={`absolute left-1/2 top-1/2 -translate-y-1/2 rounded-full px-3 py-1 text-[14px] font-bold ${BAND[band].chip} ${BAND[band].text}`}
-          style={{ marginTop: ROW_Y[band], marginLeft: -BEADS.filter((b) => b === band).length * GAP / 2 - 120 }}>
-          {BAND[band].label} {band === "high" ? "20%" : band === "medium" ? "30%" : "50%"}
+        <span key={band} className={`absolute left-1/2 top-1/2 -translate-x-full -translate-y-1/2 whitespace-nowrap rounded-full px-3 py-1 text-[14px] font-bold ${BAND[band].chip} ${BAND[band].text}`}
+          style={{ marginTop: ROW_Y[band], marginLeft: -BEADS.filter((b) => b === band).length * GAP / 2 - 16 }}>
+          {BAND[band].label}
         </span>
       ))}
     </motion.div>
@@ -84,7 +84,7 @@ function ReasonList() {
           <EffectIcon effect={r.effect} size={18} />
           <span>
             <strong>{r.sentence}</strong>{" "}
-            <span className={r.effect === "raises risk" ? "font-bold text-high" : "font-bold text-low"}>{r.effect}</span>
+            <span className={r.effect === "raises risk" ? "font-bold text-high" : "font-bold text-low"}>{EFFECT_TEXT[r.effect]}</span>
           </span>
         </li>
       ))}
@@ -135,7 +135,7 @@ function ScrollStory() {
           <Reasons progress={scrollYProgress} />
         </div>
         <p className="sr-only">
-          {STEPS.join(" ")} For example: {EXAMPLE.map((r) => `${r.sentence}, ${r.effect}`).join("; ")}.
+          {STEPS.join(" ")} For example: {EXAMPLE.map((r) => `${r.sentence}, ${EFFECT_TEXT[r.effect]}`).join("; ")}.
         </p>
       </div>
     </section>
@@ -144,5 +144,10 @@ function ScrollStory() {
 
 export function BandStory() {
   const reduce = useReducedMotion();
-  return reduce ? <StillStory /> : <ScrollStory />;
+  // The server cannot know the reader's motion setting: render the scroll story
+  // first, as the server did, and switch only after the page has loaded, so the
+  // first render matches the server's HTML.
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => setLoaded(true), []);
+  return reduce && loaded ? <StillStory /> : <ScrollStory />;
 }

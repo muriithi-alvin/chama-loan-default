@@ -12,7 +12,12 @@ Usage:
     python -m chama.pipeline train             # 6. train, test and log the models (MLflow)
     python -m chama.pipeline extract <photos>  #    ledger photos -> rows, with a vision model
     python -m chama.pipeline extract-eval      #    extraction measured against the typed pages
+    python -m chama.pipeline register-model    #    the chosen model -> MLflow registry, alias "champion"
     python -m chama.pipeline score             # 7. early-warning bands and reasons for the web pages
+    python -m chama.pipeline evaluate-chama    #    test the model on a test-only chama (MLflow)
+    python -m chama.pipeline drift             #    recent records vs the training data (Evidently)
+    python -m chama.pipeline deploy-bundle     #    demo chama + model for the cloud release (checked for real names)
+    python -m chama.pipeline deploy-publish    #    bundle -> private dataset; settings and build -> Hugging Face Space
     python -m chama.pipeline demo-chama        #    chama B's pages with fictional names, for demos
     python -m chama.pipeline web-user add ...  #    accounts for the web interface (also list, deactivate)
     python -m chama.pipeline web-stats         #    page times from the web server's request log
@@ -27,7 +32,7 @@ from pathlib import Path
 import click
 
 from chama import StepFailed
-from chama.config import load_config, pseudonym_key, shown_path
+from chama.config import load_config, pseudonym_key, shown_path, use_cloud_settings
 from chama.db import get_engine
 
 
@@ -89,8 +94,12 @@ def run_all(config: dict, engine) -> None:
 
 
 @click.group()
-def cli() -> None:
+@click.option("--cloud", is_flag=True,
+              help="Use the cloud release's database for this command (CLOUD_* in .env, D-032).")
+def cli(cloud: bool) -> None:
     """Chama data pipeline. Run `all`, or the steps in order; each can be re-run."""
+    if cloud:
+        _run(use_cloud_settings)
 
 
 @cli.command("all")
@@ -299,6 +308,134 @@ def score(chama_ids: tuple[str, ...]) -> None:
     from chama.web.services.scoring import run_score
 
     _run(lambda: run_score(load_config(), get_engine(), list(chama_ids) or None))
+
+
+@cli.command("register-model")
+def register_model() -> None:
+    """Register the chosen early-warning model, alias "champion" (S-8, D-030).
+
+    The chosen run of the latest training batch (D-023) becomes a new version
+    of chama-missed-repayment in the MLflow registry, and the alias moves to
+    it. Scoring and the worker load the model by that alias. Run it after
+    training; restart the worker to pick up the new version.
+    """
+    from chama.models.registry import ALIAS, load_champion, register
+
+    def go() -> None:
+        name, version = register()
+        champion = load_champion()
+        print(f"Registered {name} version {version} as @{ALIAS} (run {champion.run_id[:8]}, "
+              f"checksum {champion.checksum[:12]}).")
+
+    _run(go)
+
+
+@cli.command("evaluate-chama")
+@click.argument("chama_id", default="chama_a")
+def evaluate_chama(chama_id: str) -> None:
+    """Test the model trained on chama B on a test-only chama (D-029).
+
+    Scores every meeting of CHAMA_ID with a known outcome using the chosen
+    missed-repayment model, and logs PR AUC, ROC AUC and how often each band
+    missed to the MLflow experiment chama-missed-repayment-held-out, beside
+    chama B's walk-forward results. The chama must be marked test_only.
+    """
+    from chama.models.held_out import run
+
+    def evaluate() -> None:
+        result = run(get_engine(), load_config(), chama_id)
+        m, trained = result["metrics"], result["trained"]
+        print(f"{chama_id}: {m['rows']:.0f} meetings with a known outcome, {m['events']:.0f} missed "
+              f"({m['event_share']:.0%})")
+        print(f"  PR AUC  {m['pr_auc']:.3f} (95% {m.get('pr_auc_low', float('nan')):.3f}-"
+              f"{m.get('pr_auc_high', float('nan')):.3f}); chama B walk forward "
+              f"{trained.get('metrics.forward_pr_auc', float('nan')):.3f}")
+        print(f"  ROC AUC {m['roc_auc']:.3f} (95% {m.get('roc_auc_low', float('nan')):.3f}-"
+              f"{m.get('roc_auc_high', float('nan')):.3f}); chama B walk forward "
+              f"{trained.get('metrics.forward_roc_auc', float('nan')):.3f}")
+        print("  How often each band missed, with chama B's cut-offs:")
+        print(result["bands_trained_cutoffs"].to_string(index=False))
+        print("Logged to MLflow: experiment chama-missed-repayment-held-out.")
+
+    _run(evaluate)
+
+
+@cli.command()
+@click.option("--chama", "chama_id", default="chama_b", show_default=True)
+@click.option("--months", default=12, show_default=True, help="The recent window to compare.")
+def drift(chama_id: str, months: int) -> None:
+    """Compare a chama's recent records with the training data (S-7, Evidently).
+
+    For each of the model's 17 inputs, tests whether the last MONTHS months of
+    the chama's meetings (all its rows for a test-only chama) differ from the
+    rows the model learned from. Writes an HTML report to data/reports/drift/
+    and logs it to the MLflow experiment chama-missed-repayment-drift.
+    """
+    from chama.models.drift import run
+
+    def go() -> None:
+        result = run(get_engine(), load_config(), chama_id, months)
+        o, t = result["overall"], result["table"]
+        print(f"{chama_id}: {result['current_rows']} recent rows against {result['reference_rows']} "
+              f"rows the model learned from")
+        print(f"  {o.get('drifted_features', 0):.0f} of {len(t)} inputs drifted ({o.get('drifted_share', 0):.0%})")
+        for r in t[t["drifted"]].itertuples():
+            print(f"  - {r.feature} ({r.test}: {r.value:.3g}, threshold {r.threshold:g})")
+        print(f"Report: {result['html']}  (also in MLflow, experiment chama-missed-repayment-drift)")
+
+    _run(go)
+
+
+@cli.command("deploy-bundle")
+def deploy_bundle() -> None:
+    """Write the cloud release's private bundle to data/deploy/bundle (D-032).
+
+    The demo chama's typed pages and names and the champion model, checked
+    for every word of every real member's name first. Upload the folder to the
+    private Hugging Face dataset named in docs/deployment.md.
+    """
+    import json
+
+    from chama.deploy import build
+
+    def go() -> None:
+        out = build(load_config())
+        m = json.loads((out / "MANIFEST.json").read_text(encoding="utf-8"))
+        print(f"Bundle written to {shown_path(out)}: {len(m['files'])} files, model version "
+              f"{m['model']['version']} (checksum {m['model']['checksum'][:12]}), checked against "
+              f"{m['checked_against_real_names']} real names.")
+
+    _run(go)
+
+
+@cli.command("deploy-publish")
+@click.option("--ref", default="main", show_default=True, help="The Git branch the image is built from.")
+@click.option("--rebuild", is_flag=True, help="Rebuild the image, for example after pushing new code.")
+def deploy_publish(ref: str, rebuild: bool) -> None:
+    """Publish the release to Hugging Face from the settings in .env (D-032).
+
+    Uploads data/deploy/bundle to a private dataset, sets up the public Space
+    with its variables and secrets, and uploads the Dockerfile, which starts
+    the build. Safe to run again. Needs HF_TOKEN and the other settings listed
+    in docs/deployment.md.
+    """
+    from chama.deploy import publish
+
+    def go() -> None:
+        address = publish(ref, rebuild)
+        print(f"Published. Build log: the Space's Logs tab. The site will open at {address}")
+        print(f"Ready when {address}/api/health says ready.")
+
+    _run(go)
+
+
+@cli.command("first-start", hidden=True)
+def first_start() -> None:
+    """Load and score the demo chama into an empty database: at the cloud
+    release's start-up, or from the laptop with --cloud (D-032)."""
+    from chama.deploy import first_start as start
+
+    _run(lambda: start(load_config(), get_engine()))
 
 
 @cli.command("demo-chama")

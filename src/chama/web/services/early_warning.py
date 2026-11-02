@@ -17,13 +17,14 @@ from chama.web.settings import chama_name
 
 BAND_ORDER = {"high": 0, "medium": 1, "low": 2}
 
-# What each band meant in testing: the Milestone 2 report, section 14.2
-# (12% / 24% / 35% of members in the band missed a repayment within the next
-# 3 meetings, walking forward through 2016-2025).
+# Each band in everyday words, as the pages name them: "Follow up now",
+# "Keep an eye on", "Less likely to miss" (Sprint II feedback). How often each
+# band missed in testing (35% / 24% / 12%, Milestone 2 report section 14.2)
+# is on the About page only.
 BAND_MEANING = {
-    "high": "In testing, about 1 in 3 High-band members missed a repayment within the next 3 meetings.",
-    "medium": "In testing, about 1 in 4 Medium-band members missed a repayment within the next 3 meetings.",
-    "low": "In testing, about 1 in 8 Low-band members missed a repayment within the next 3 meetings.",
+    "high": "More likely than others to miss a repayment in the next 3 meetings. Talk to them first.",
+    "medium": "Could miss a repayment in the next 3 meetings. Check in when you can.",
+    "low": "Less likely to miss a repayment in the next 3 meetings.",
 }
 FOLLOW_UP_NOTE = "This is a prompt to follow up, not a decision."
 
@@ -39,6 +40,8 @@ def _source(score: dict) -> dict:
         "meeting_date": score["meeting_date"],
         "model_run_id": score["model_run_id"],
         "model_label": model_label(score["model_name"], score["model_run_id"]),
+        "model_version": score.get("model_version"),
+        "model_checksum": score.get("model_checksum"),
         "scored_at": score["scored_at"],
     }
 

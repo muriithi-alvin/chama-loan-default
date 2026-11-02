@@ -353,7 +353,7 @@ export function Review({ initial }: { initial: Draft }) {
           <h2 id="rv-confirm" className="text-[26px]">{confirm === "accept" ? "Accept this page?" : "Discard this scan?"}</h2>
           <p className="text-[17px] text-subtle">
             {confirm === "accept"
-              ? `The ${lines.length} lines become the next ledger page in the records, and the pipeline runs: names, codes, checks and new scores. After this, the page can only change through a new scan.`
+              ? `The ${lines.length} lines become the next ledger page in the records, and Kibaba updates the records and works out who to follow up. After this, the page can only change through a new scan.`
               : "The rows read from this photo are set aside and nothing is added to the records. The edit record keeps what was changed."}
           </p>
           <div className="flex flex-wrap gap-3">
