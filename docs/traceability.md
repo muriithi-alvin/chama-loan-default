@@ -5,7 +5,7 @@ and the tests that check them. Requirement IDs (G1, OFF-3, X10 and so on) are
 the ones in `docs/m4_master_prompt.md`; scenarios T1 to T10 and their manual
 checks are in [m4_test_record.md](m4_test_record.md). Automated tests are in
 `tests/` and the dbt tests in `transform/`. All run on every push (GitHub
-Actions): 236 passed on 2 Nov 2026.
+Actions): 235 passed on 2 Nov 2026.
 
 **Status:** Done; Partly (met with a stated gap); Cut (dropped after the
 Sprint II review as not needed, now future work); Pending (built, waiting for
@@ -93,7 +93,7 @@ a loan (G2, N1).
 
 | Criterion | Where | Status |
 | --- | --- | --- |
-| A deployed HTTPS release | Hugging Face Docker Space with Supabase's free PostgreSQL, demo chama only: `deploy/huggingface/`, [deployment.md](deployment.md) | Pending: ready to deploy once the accounts exist |
+| A deployed HTTPS release | Hugging Face Docker Space with its own PostgreSQL and Supabase sign-in (D-032, D-033), demo chama only: `deploy/huggingface/`, [deployment.md](deployment.md) | Pending: ready to deploy once the accounts exist |
 | Traceability from objectives to tests | this record | Done |
 | Usability testing with real users | [usability_test.md](usability_test.md) (script, tasks, questionnaire) | Pending: sessions with officials and members |
 | Failure-path demos | T4 (not a ledger page), T5 (wrong file), T7 (session ends), T8 (service down) | T8 seen for real; T4, T5, T7 to show |

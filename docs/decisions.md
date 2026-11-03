@@ -694,3 +694,26 @@ them. `deploy-publish` sets up the dataset and Space from `.env`, and
 `--cloud` points one command at the release's database. The start-up was
 rehearsed on 2 Nov 2026 with the cloud settings on an empty local database;
 the image itself is first built on Hugging Face.
+
+## D-033 The release keeps its database inside its own container
+**Context.** D-032 planned Supabase's PostgreSQL for the release. The first
+attempt found that the project laptop's network blocks outgoing ports 5432 and
+6543, so the laptop cannot reach that database. Hugging Face's forum threads
+also show outgoing database ports from Spaces being limited or opened only on
+request, so the release might not reach it either.
+**Decision.** The image installs PostgreSQL, and `start.sh` starts it for the
+container alone: run by the container's unprivileged user, listening only on
+127.0.0.1, with a password made fresh at each start. Each start loads and scores
+the demo chama from the bundle and adds the two demo accounts
+(`RELEASE_OFFICIAL_EMAIL`, `RELEASE_MEMBER_EMAIL`, kept as Space secrets). Sign-in
+stays with Supabase Auth, which is reached over HTTPS. This replaces the Supabase
+database in D-032, and the `--cloud` option and `POSTGRES_SSLMODE` setting made
+for it are gone.
+**Consequences.** No database crosses the internet and no database password is
+stored in the Space. Every restart returns the release to the demo chama's
+starting state: scanned pages, edit records and uploads made there last only until
+the next restart, which suits a demonstration but not a lasting service. Starting
+takes about 90 seconds longer. Both the database start-up (in the image's base
+system, as user 1000) and the first start (on PostgreSQL 15) were rehearsed on
+2 Nov 2026. A lasting service would use a managed database reached over an allowed
+port (future work).
