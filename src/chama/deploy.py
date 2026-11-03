@@ -34,9 +34,11 @@ SPACE_NAME = "kibaba"
 DATASET_NAME = "kibaba-data"
 GITHUB_REPO = "muriithi-alvin/chama-loan-default"
 # What publish reads from .env; the laptop's own database settings are not among them
-PUBLISH_SETTINGS = ("HF_TOKEN", "HF_BUILD_TOKEN", "GITHUB_READ_TOKEN", "CLOUD_POSTGRES_HOST", "CLOUD_POSTGRES_USER",
-                    "CLOUD_POSTGRES_PASSWORD", "CLOUD_PSEUDONYM_KEY", "GROQ_API_KEY", "SUPABASE_URL",
-                    "SUPABASE_PUBLISHABLE_KEY")
+PUBLISH_SETTINGS = ("HF_TOKEN", "HF_BUILD_TOKEN", "GITHUB_READ_TOKEN", "CLOUD_PSEUDONYM_KEY", "GROQ_API_KEY",
+                    "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "RELEASE_OFFICIAL_EMAIL", "RELEASE_MEMBER_EMAIL")
+# The release's two demo accounts, in the demo chama's fictional names
+OFFICIAL_NAME = "Grace Achieng"
+MEMBER_NAME = "Muthoni Ndegwa"
 
 
 def real_names(config: dict) -> list[str]:
@@ -108,9 +110,27 @@ def build(config: dict, out_dir: Path | None = None) -> Path:
     return out_dir
 
 
+def add_accounts(config: dict, engine) -> None:
+    """The release's demo official and member (RELEASE_*_EMAIL). Their passwords
+    are in Supabase Auth, as on the laptop."""
+    from sqlalchemy import text
+
+    from chama.web.services.accounts import add_user
+
+    demo_id = next(c["id"] for c in config["chamas"] if c.get("demo"))
+    with engine.connect() as conn:
+        code = conn.execute(text("SELECT member_code FROM private.member_codes WHERE chama_id = :c "
+                                 "AND canonical_name = :n"), {"c": demo_id, "n": MEMBER_NAME}).scalar_one_or_none()
+    if code is None:
+        raise StepFailed(f"{MEMBER_NAME} is not a member of {demo_id}.")
+    print(add_user(engine, os.environ["RELEASE_OFFICIAL_EMAIL"].strip(), "official", demo_id, None,
+                   OFFICIAL_NAME, "treasurer"))
+    print(add_user(engine, os.environ["RELEASE_MEMBER_EMAIL"].strip(), "member", demo_id, code, None, None))
+
+
 def first_start(config: dict, engine) -> None:
-    """On the release's first start, load the demo chama into the empty
-    database and score it; on later starts the records are already there."""
+    """Each time the release starts its database is new (D-033): load the demo
+    chama, score it and add the accounts."""
     from sqlalchemy import text
 
     from chama.db import create_schemas, table_exists
@@ -127,6 +147,7 @@ def first_start(config: dict, engine) -> None:
     print("first start: loading the demo chama")
     run_all(config, engine)
     run_score(config, engine)
+    add_accounts(config, engine)
 
 
 
@@ -157,12 +178,12 @@ def publish(ref: str = "main", rebuild: bool = False, api=None, bundle: Path | N
     api.create_repo(space, repo_type="space", space_sdk="docker", private=False, exist_ok=True)
     address = api.space_info(space).host
     variables = {"GITHUB_REPO": GITHUB_REPO, "GIT_REF": ref, "BUNDLE_REPO": dataset, "WEB_ORIGINS": address,
-                 "COOKIE_SECURE": "true", "POSTGRES_HOST": values["CLOUD_POSTGRES_HOST"], "POSTGRES_PORT": "5432",
-                 "POSTGRES_DB": "postgres", "POSTGRES_SSLMODE": "require"}
+                 "COOKIE_SECURE": "true"}
     secrets = {"GITHUB_TOKEN": values["GITHUB_READ_TOKEN"], "HF_TOKEN": values["HF_BUILD_TOKEN"],
-               "POSTGRES_USER": values["CLOUD_POSTGRES_USER"], "POSTGRES_PASSWORD": values["CLOUD_POSTGRES_PASSWORD"],
                "PSEUDONYM_KEY": values["CLOUD_PSEUDONYM_KEY"], "GROQ_API_KEY": values["GROQ_API_KEY"],
-               "SUPABASE_URL": values["SUPABASE_URL"], "SUPABASE_PUBLISHABLE_KEY": values["SUPABASE_PUBLISHABLE_KEY"]}
+               "SUPABASE_URL": values["SUPABASE_URL"], "SUPABASE_PUBLISHABLE_KEY": values["SUPABASE_PUBLISHABLE_KEY"],
+               "RELEASE_OFFICIAL_EMAIL": values["RELEASE_OFFICIAL_EMAIL"],
+               "RELEASE_MEMBER_EMAIL": values["RELEASE_MEMBER_EMAIL"]}
     for key, value in variables.items():
         api.add_space_variable(space, key, value)
     for key, value in secrets.items():

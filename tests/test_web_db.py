@@ -164,6 +164,21 @@ def test_a_deactivated_account_can_be_given_another_member(engine):
     assert rows == [("M-b", True)]
 
 
+def test_the_release_adds_its_official_and_member_by_the_fictional_name(engine, monkeypatch):
+    from chama.config import load_config
+    from chama.deploy import MEMBER_NAME, add_accounts
+
+    monkeypatch.setenv("RELEASE_OFFICIAL_EMAIL", "release.official@example.com")
+    monkeypatch.setenv("RELEASE_MEMBER_EMAIL", "release.member@example.com")
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO private.member_codes VALUES ('chama_demo', :n, 'M-release')"), {"n": MEMBER_NAME})
+    add_accounts(load_config(), engine)
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT role, chama_id, member_code FROM app.users "
+                                 "WHERE email LIKE 'release.%' ORDER BY role")).all()
+    assert rows == [("member", "chama_demo", "M-release"), ("official", "chama_demo", None)]
+
+
 def test_the_footer_status_gives_members_no_score_details(engine):
     from chama.web.data.users import User
     from chama.web.routes.session import records_status

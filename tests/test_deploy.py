@@ -1,5 +1,5 @@
-"""The cloud release (D-032): only the demo chama, an encrypted database
-connection, and a bundle that never carries a real name. Made-up names only."""
+"""The cloud release (D-032, D-033): only the demo chama, and a bundle that never
+carries a real name. Made-up names only."""
 import pandas as pd
 import pytest
 
@@ -52,16 +52,6 @@ def test_the_release_keeps_only_the_demo_chama(monkeypatch):
     assert len(load_config()["chamas"]) > 1
 
 
-def test_an_encrypted_connection_is_asked_for_only_when_set(monkeypatch):
-    for key, value in {"POSTGRES_USER": "u", "POSTGRES_PASSWORD": "p", "POSTGRES_DB": "d",
-                       "POSTGRES_HOST": "h", "POSTGRES_PORT": "5432"}.items():
-        monkeypatch.setenv(key, value)
-    monkeypatch.delenv("POSTGRES_SSLMODE", raising=False)
-    assert database_url() == "postgresql+psycopg2://u:p@h:5432/d"
-    monkeypatch.setenv("POSTGRES_SSLMODE", "require")
-    assert database_url().endswith("/d?sslmode=require")
-
-
 def test_a_changed_model_file_is_refused(tmp_path):
     import json
 
@@ -76,9 +66,9 @@ def test_a_changed_model_file_is_refused(tmp_path):
 
 
 SETTINGS = {"HF_TOKEN": "write-token", "HF_BUILD_TOKEN": "read-token", "GITHUB_READ_TOKEN": "github-token",
-            "CLOUD_POSTGRES_HOST": "pooler.example.test", "CLOUD_POSTGRES_USER": "postgres.ref",
-            "CLOUD_POSTGRES_PASSWORD": "pass@word", "CLOUD_PSEUDONYM_KEY": "cloud-key", "GROQ_API_KEY": "groq-key",
-            "SUPABASE_URL": "https://ref.supabase.co", "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_x"}
+            "CLOUD_PSEUDONYM_KEY": "cloud-key", "GROQ_API_KEY": "groq-key", "SUPABASE_URL": "https://ref.supabase.co",
+            "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_x", "RELEASE_OFFICIAL_EMAIL": "official@example.com",
+            "RELEASE_MEMBER_EMAIL": "member@example.com"}
 
 
 class FakeHub:
@@ -144,7 +134,8 @@ def test_secrets_are_never_sent_as_visible_variables(bundle):
     secrets = {c[1]: c[2] for c in hub.calls if c[0] == "secret"}
     assert variables["WEB_ORIGINS"] == "https://someone-kibaba.hf.space" and variables["GIT_REF"] == "main"
     assert secrets["HF_TOKEN"] == "read-token" and secrets["PSEUDONYM_KEY"] == "cloud-key"
-    for private in ("write-token", "read-token", "github-token", "pass@word", "cloud-key", "groq-key"):
+    assert secrets["RELEASE_MEMBER_EMAIL"] == "member@example.com"
+    for private in ("write-token", "read-token", "github-token", "cloud-key", "groq-key", "member@example.com"):
         assert private not in variables.values()
     assert "write-token" not in secrets.values()
 
@@ -161,9 +152,9 @@ def test_a_dataset_that_is_not_private_gets_no_upload(bundle):
 def test_missing_settings_are_named_before_anything_is_sent(bundle, monkeypatch):
     from chama.deploy import publish
 
-    monkeypatch.delenv("CLOUD_POSTGRES_PASSWORD")
+    monkeypatch.delenv("CLOUD_PSEUDONYM_KEY")
     hub = FakeHub()
-    with pytest.raises(StepFailed, match="CLOUD_POSTGRES_PASSWORD"):
+    with pytest.raises(StepFailed, match="CLOUD_PSEUDONYM_KEY"):
         publish(api=hub, bundle=bundle)
     assert hub.calls == []
 
@@ -176,18 +167,3 @@ def test_a_password_with_special_characters_stays_in_one_piece(monkeypatch):
         monkeypatch.setenv(key, value)
     url = make_url(database_url())
     assert (url.username, url.password, url.host) == ("postgres.ref", "p@ss/w:rd", "pooler.example.test")
-
-
-def test_cloud_commands_use_only_the_demo_chama_and_the_cloud_key(monkeypatch):
-    from chama.config import use_cloud_settings
-
-    for key, value in SETTINGS.items():
-        monkeypatch.setenv(key, value)
-    for key in ("POSTGRES_HOST", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_PORT", "POSTGRES_DB",
-                "POSTGRES_SSLMODE", "PSEUDONYM_KEY", "CHAMA_ONLY", "MODEL_BUNDLE"):
-        monkeypatch.setenv(key, "laptop")   # restored afterwards by monkeypatch
-    use_cloud_settings()
-    assert [c["id"] for c in load_config()["chamas"]] == ["chama_demo"]
-    assert "pooler.example.test" in database_url() and database_url().endswith("sslmode=require")
-    import os
-    assert os.environ["PSEUDONYM_KEY"] == "cloud-key"

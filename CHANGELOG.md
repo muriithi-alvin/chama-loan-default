@@ -44,10 +44,10 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 - **HTTPS release (D-032):** `deploy/huggingface/` (Dockerfile, start script,
   Space README) and `docs/deployment.md`; `deploy-bundle` writes the private
   bundle (demo chama and champion model, checked for real names);
-  `deploy-publish` sets up the private dataset and the Space from `.env`;
-  `--cloud` points one command at the release's database; the image installs
-  the project's exact library versions (`constraints.txt`);
-  `CHAMA_ONLY`, `POSTGRES_SSLMODE` and `MODEL_BUNDLE` settings for the cloud.
+  `deploy-publish` sets up the private dataset and the Space from `.env`; the
+  image installs the project's exact library versions (`constraints.txt`) and
+  runs its own PostgreSQL, loaded with the demo chama and its two accounts at
+  each start (D-033); `CHAMA_ONLY` and `MODEL_BUNDLE` settings for the cloud.
 - **Sprint III records:** `docs/traceability.md` (objectives to requirements to
   tests) and `docs/usability_test.md` (tasks, questionnaire, record sheet).
 

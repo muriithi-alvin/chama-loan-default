@@ -17,7 +17,7 @@ FROM python:3.11-slim-bookworm
 ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 \
     DO_NOT_TRACK=1 NEXT_TELEMETRY_DISABLED=1 MLFLOW_DISABLE_AGENT_HINT=1 \
     CHAMA_ONLY=chama_demo MODEL_BUNDLE=/app/bundle/model
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates postgresql \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
