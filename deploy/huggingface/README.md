@@ -6,7 +6,7 @@ colorTo: yellow
 sdk: docker
 app_port: 7860
 pinned: false
-short_description: Early warning for chama officials (fictional demo data)
+short_description: Early warning for chama officials
 startup_duration_timeout: 1h
 ---
 
@@ -18,6 +18,7 @@ meeting, and why. A Strathmore University CS Project II (2026) prototype.
 Open the site at its own address (`https://<owner>-kibaba.hf.space`), not
 inside this page: sign-in needs the site's own cookies.
 
-Everything shown here belongs to a demo chama with fictional names. The code
-and data are private; this Space holds only the instructions to build the
-release.
+The records belong to a chama that uses Kibaba, and every page but the first
+needs a sign-in. The code and data are private: this Space holds only the
+instructions to build the release, and the records are kept in a private
+storage bucket.

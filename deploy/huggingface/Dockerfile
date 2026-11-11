@@ -1,12 +1,13 @@
-# Kibaba's release on a Hugging Face Docker Space (decision D-032).
+# Kibaba's release on a Hugging Face Docker Space (decisions D-032, D-041).
 #
 # The Space holds only this file and README.md. When Hugging Face builds the
 # image it fetches, with build secrets:
 #   - the code, from the private GitHub repository (secret GITHUB_TOKEN:
 #     a fine-grained token that can only read this repository);
-#   - the demo chama's typed pages, its fictional names and the champion
-#     model, from a private Hugging Face dataset (secret HF_TOKEN: read-only).
-# Neither the code nor any data is visible in the public Space.
+#   - the release chamas' typed pages, their names and the champion model,
+#     from a private Hugging Face dataset (secret HF_TOKEN: read-only).
+# Neither the code nor any data is visible in the public Space. What officials
+# add is kept in a private storage bucket mounted at /data (start.sh).
 #
 # Space variables (passed to the build): GITHUB_REPO, GIT_REF, BUNDLE_REPO.
 # Space secrets (also read at run time): see docs/deployment.md.

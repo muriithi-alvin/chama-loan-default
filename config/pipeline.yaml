@@ -1,12 +1,13 @@
 # Pipeline settings. Paths are relative to the project root.
 # Each Chama has a folder of yearly Excel files (e.g. data/raw/chama_b/2014.xlsx).
 # The loader reads every .xlsx in the folder and combines them.
-# `name` is shown on the web pages. A chama with `demo: true` is a copy with
-# fictional names for demonstrations (D-028): built by `demo-chama`, shown
-# with its own names, and never exported for training. A chama with
-# `test_only: true` is kept back to test the model (D-029): also never
-# exported for training. `reading_notes` are added to the reading
+# `name` is shown on the web pages. A chama with `demo: true` is a copy of
+# another chama's typed pages for the web interface (D-028, D-036): built by
+# `demo-chama`, shown with its own names, and never exported for training.
+# A chama with `test_only: true` is kept back to test the model (D-029): also
+# never exported for training. `reading_notes` are added to the reading
 # instructions for that chama's scans only, when its book has its own columns.
+# A chama with `release: true` is served by `serve-release` (D-034, D-036).
 chamas:
   - id: chama_a          # the first Chama (records from 2023)
     name: Chama A
@@ -32,13 +33,31 @@ chamas:
         meeting_date as written.
       - Loans given at the meeting are listed below the table; a due date written beside a loan
         goes in that loan's remarks.
-  - id: chama_b          # the second Chama (records from 2014)
-    name: Chama B
+  - id: chama_b          # the second Chama (records from 2014): Humble Sister
+    name: Humble Sister
     raw_dir: data/raw/chama_b
     photos_dir: data/photos/chama_b
-  - id: chama_demo       # chama B's typed pages with fictional names, for the review
-    name: Tumaini Women's Group
+  # Humble Sister in the web interface (D-036): chama B's typed pages with the
+  # members' real names, which its officials agreed to show. The id is kept from
+  # the earlier demo copy (D-028) so the release, its files and tests still find it.
+  - id: chama_demo
+    name: Humble Sister
     demo: true
+    release: true
+    copy_of: chama_b
+    names: real          # real: chama B's names (with `renames`); fictional: made-up names (D-028)
+    # The MOU with Humble Sister's officials covers hosting Kibaba, so its records
+    # may be held on Hugging Face for the live release (D-041).
+    hosting: agreed
+    # Pages after this month are left out, for the officials to enter them in the
+    # interface by photo or by typing, to test it (Aug 2024 is page 129).
+    records_until: 2024-07
+    # Two members renamed in this copy only, so the project's own accounts can
+    # sign in as them: the treasurer and an ordinary member. Chama B's records
+    # and the trained model keep the real names.
+    renames:
+      Beth Wamae: Alvin Muriithi
+      Esther Mwangi: Alvin Wise
     raw_dir: data/raw/chama_demo
     photos_dir: data/photos/chama_demo
 
