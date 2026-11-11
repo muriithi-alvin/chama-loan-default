@@ -12,8 +12,9 @@ The web interface has three parts that run side by side (decision D-027):
 Run the Python commands from the project folder and the npm commands from
 `frontend/`, which has its own `package.json`.
 
-Sign-in passwords live in Supabase Auth (free plan). No chama data is sent
-to Supabase: only the email and password, when someone signs in.
+Sign-in lives in Supabase Auth (free plan): passwords, Google and texted
+codes (D-037). No chama data is sent to Supabase: only the email and password,
+the Google round trip, or the phone number a code is texted to.
 
 ## 1. One-time setup
 
@@ -41,10 +42,12 @@ cd ..
    name it `chama-web`, generate a database password (keep it; the project's
    database is not used) and pick the closest region.
 2. **Authentication > Sign In / Providers**: keep **Email** on. Turn **off**
-   "Allow new users to sign up", so only accounts you add can sign in.
+   "Allow new users to sign up", so only accounts you add can sign in, unless
+   you use phone codes (step 7).
 3. **Authentication > Users > Add user > Create new user**: enter the email
    and a password of 12 or more characters, and tick **Auto Confirm User**.
-   Do this for each person, including the demo accounts.
+   Do this for each person, including the release's accounts. Google sign-in
+   with the same email then opens the same Supabase user.
 4. **Project Settings > API Keys**: copy the **Publishable key**
    (`sb_publishable_...`); on an older project, the **anon public** key. The
    project URL (`https://<ref>.supabase.co`) is under **Connect** or **Data API**.
@@ -55,16 +58,56 @@ cd ..
    SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
    ```
 
+6. **Google sign-in (D-037, free).** In https://console.cloud.google.com, make a
+   project, then **APIs & Services > OAuth consent screen** (External, app name
+   Kibaba, your email; while it is in Testing, add each person's Gmail under
+   Test users). Then **Credentials > Create credentials > OAuth client ID**, type
+   *Web application*, with the authorised redirect URI Supabase shows on its
+   Google provider page (`https://<ref>.supabase.co/auth/v1/callback`). In
+   Supabase, **Authentication > Sign In / Providers > Google**: turn it on and
+   paste the client ID and secret. Then **Authentication > URL Configuration >
+   Redirect URLs**: add every address the site is opened at, with the callback:
+
+   ```
+   http://localhost:3000/api/session/google/callback
+   https://<your ngrok address>/api/session/google/callback
+   ```
+
+   The sign-in page shows "Continue with Google" only once Google is on.
+7. **Phone codes (D-037).** Officials confirm every sign-in with a code texted to
+   their phone, and members may sign in with a phone code alone. In Supabase,
+   **Authentication > Sign In / Providers > Phone**: turn it on and choose an
+   SMS provider. Twilio has a free trial (it texts only numbers you verify in
+   Twilio, which is enough to test with your own phone); every real text is
+   paid after that. Free for testing: under **Test Phone Numbers and OTPs**, add
+   `254712345678=123456` (your number without the +, and a fixed code): Supabase
+   then sends no text to that number and accepts that code. Supabase still needs
+   a provider filled in before test numbers work.
+   Supabase makes its own user for a phone the first time a code is sent, so
+   for phone codes turn **on** "Allow new users to sign up" (step 2). This is
+   safe here: Kibaba asks for a code only for a number that has an account in
+   app.users, and the Supabase key stays on the server, so nobody else can ask
+   Supabase for codes or sign in to Kibaba with a Supabase user of their own.
+
+Officials without a phone cannot finish signing in. For development on this
+laptop only, `TWO_STEP_FOR_OFFICIALS=false` in `.env` turns the second step off.
+
 A free project pauses after a week without use: open its dashboard the day
 before a demonstration.
 
 Password resets by email are not set up (the free plan's email service is
 limited): reset a password in **Authentication > Users**.
 
-### The demo chama (D-028)
+### Humble Sister in the interface (D-036)
 
-For any demonstration, use the demo chama: chama B's typed pages with
-fictional names. Build it once, then whenever chama B's files change:
+The interface shows Humble Sister (chama B) by its members' real names, which
+its officials agreed to. It is a copy of chama B's typed pages (`chama_demo` in
+config/pipeline.yaml), made from the copy's settings there: `names: real`,
+`renames` (Beth Wamae is shown as Alvin Muriithi and Esther Mwangi as Alvin Wise,
+in the copy only) and `records_until: 2024-07` (pages 1 to 128). Pages 129 to
+149, August 2024 to April 2026, are for entering in the interface, by photo
+(chama B's photos are `data/photos/chama_b/chama_b_p129.jpg` onwards) or by
+typing. Build it once, then whenever chama B's files or these settings change:
 
 ```powershell
 python -m chama.pipeline demo-chama      # writes data/raw/chama_demo/ and its names file
@@ -72,26 +115,29 @@ python -m chama.pipeline all             # the pipeline, now for chama_demo too
 python -m chama.pipeline score           # bands and reasons for every chama
 ```
 
-For the demo scan, write a fictional ledger page by hand (open decision 1),
-using names from `python -m chama.pipeline web-user codes --chama chama_demo`,
-dated after the demo chama's last meeting.
+An earlier copy, with any pages scanned into it, is moved to
+`data/interim/replaced/`. Pages must be added in date order: page 129 first.
 
 ### Accounts
 
 After creating the person's sign-in in Supabase (step 3 above), say what the
-email may open:
+email or phone may open. Officials need a phone (the second step, D-037):
 
 ```powershell
-# an official of the demo chama, shown as a fictional name
-python -m chama.pipeline web-user add --email <official email> --role official --chama chama_demo --name "Grace Achieng" --position treasurer
+# the treasurer
+python -m chama.pipeline web-user add --email <your email> --phone 07XXXXXXXX --role official --chama chama_demo --name "Alvin Muriithi" --position treasurer
 
-# a member: first find their code
+# a member: first find their code (Alvin Wise is Esther Mwangi's record)
 python -m chama.pipeline web-user codes --chama chama_demo
-python -m chama.pipeline web-user add --email <member email> --role member --chama chama_demo --member M-xxxxxxxx
+python -m chama.pipeline web-user add --email <member email> --phone 07XXXXXXXX --role member --chama chama_demo --member M-xxxxxxxx
+# a member with a phone only, who signs in with texted codes
+python -m chama.pipeline web-user add --phone 07XXXXXXXX --role member --chama chama_demo --member M-xxxxxxxx
 
 python -m chama.pipeline web-user list
-python -m chama.pipeline web-user deactivate --email <email>
+python -m chama.pipeline web-user deactivate --email <email or phone>
 ```
+
+An email or phone has one account, in one chama.
 
 ## 2. Running it
 
@@ -117,7 +163,8 @@ Check that everything is ready: http://localhost:3000/api/health shows
 
 Set `DEMO_MODE=true` in `.env` (then restart the API) before showing the
 site on a projector: fictional names for any real chama, and no real ledger
-photo. The demo chama's names are fictional already.
+photo. It does not change the interface copy (`chama_demo`): Humble Sister's
+names are shown there as its officials agreed (D-036).
 
 ### Trying it from a phone on the same Wi-Fi
 

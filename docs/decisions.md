@@ -717,3 +717,166 @@ takes about 90 seconds longer. Both the database start-up (in the image's base
 system, as user 1000) and the first start (on PostgreSQL 15) were rehearsed on
 2 Nov 2026. A lasting service would use a managed database reached over an allowed
 port (future work).
+
+## D-034 The release runs on the project laptop behind a free tunnel
+**Context.** On 3 Nov 2026, publishing to Hugging Face (D-032, D-033) was refused:
+hosting a Docker Space on its free hardware now needs a PRO subscription. Alvin
+chose a free route over paying. The laptop's network blocks the usual TCP route for
+Cloudflare Tunnel (port 7844) but allows ngrok, which runs over port 443.
+**Decision.** `python -m chama.pipeline serve-release --address <https address>` runs
+the release on the laptop, and ngrok gives it an HTTPS address. It uses its own
+database, `kibaba_release`, holding only the demo chama, with the release's own
+pseudonym key and the checked model bundle, so the real chamas' records are not
+reachable from it. Only the pages listen, on 127.0.0.1, for the tunnel. The tunnel is
+started by hand.
+**Consequences.** It costs nothing, and scanned pages last across restarts until
+`--fresh`. But the site is up only while the laptop is on, awake and online, so this
+meets the Sprint III "deployed HTTPS release" criterion less fully than a hosted
+service; a limitation to state in the report. Moving to a hosted service later needs
+only a PRO subscription and `deploy-publish`: the Hugging Face files stay in
+`deploy/huggingface/`, though that image has never been built.
+
+## D-035 A reading under the wrong field names is kept for review
+**Context.** On 5 Nov 2026 a clear mock page failed with "could not be read", as did
+a shopping list and a blurred page. The free model had read them correctly but did not
+keep to the schema's field names (`meet_date` for `meeting_date`, `problem` left out),
+so the answer failed validation. Asking Groq for strict output did not help: it checks
+the answer after writing it and refuses it, so the reading is still lost.
+**Decision.** When an answer fails validation but says whether the photo is a ledger
+page, `schema.repaired_page` puts it under the right names. A missing field is empty,
+and a value under an unknown name goes in the row's remarks or the meeting's notes, so
+nothing is dropped. The extraction prompt is unchanged, and the Claude extractor is not
+affected. An answer about no page at all, or a "page" with no member lines, stays
+"could not be read".
+**Consequences.** A wrong field name is one more way to misplace a value, but every row
+is still checked against the photo before Accept (D-024). With this, the May and June
+mock pages were read with every value right, and a shopping list and a blurred page
+were refused with the model's reason (5 Nov, reader only, nothing saved).
+
+## D-036 The interface shows Humble Sister by its real names
+**Context.** After the presentation on 5 Nov 2026, chama B's officials agreed, under
+an MOU, that the project may show their members' real names in the interface, and
+that Humble Sister (chama B's real name) will be the first chama to adopt Kibaba.
+Chama A is still deciding. Until now the interface held a copy of chama B with
+fictional names, "Tumaini Women's Group" (D-028). Alvin also asked to test the
+interface by entering the pages from August 2024 onwards himself, and to sign in as
+two members: as the treasurer, Alvin Muriithi, and as an ordinary member, Alvin Wise.
+**Decision.** The interface copy (`chama_demo` in config/pipeline.yaml) becomes
+"Humble Sister", made by `demo-chama` from settings instead of code:
+`names: real` keeps chama B's agreed names, `renames` gives Beth Wamae the name
+Alvin Muriithi and Esther Mwangi the name Alvin Wise in the copy only, and
+`records_until: 2024-07` keeps pages 1 to 128. Pages 129 to 149 (August 2024 to April
+2026) are left for Alvin to enter in the interface by photo or by typing. The copy's
+names file keeps every one of chama B's reviewed spellings, so a photo of a real page
+is matched at once. Chama B itself is also named Humble Sister. The copy's id stays
+`chama_demo`, so the release, its files and the tests still find it, and it is still
+never exported for training. The release serves the chamas marked `release: true`
+instead of a fixed id, so chama A can be added beside Humble Sister later. Its two
+accounts are Alvin Muriithi (treasurer) and Alvin Wise (member). An earlier copy is
+moved to data/interim/replaced/, not deleted.
+**Consequences.** The real names are on screen for anyone signed in to Humble
+Sister; a member still sees only their own records (R2), and the landing page keeps
+its made-up example names, because it is public. The bundle is no longer checked for
+real names; it is marked as holding them, and `deploy-publish` refuses it, because
+the officials agreed to their names on screen, not to storing them on Hugging Face.
+Chama B's records, its names file and the trained model are unchanged; the two
+renames exist in the copy only. Free text stays emptied in the copy, as before. A
+person still has one account in one chama; belonging to two chamas is future work.
+
+## D-037 Sign-in with Google or a phone, and officials confirm with a texted code
+**Context.** At the presentation, sign-in was called too basic: only an email and a
+password. Google sign-in and phone sign-in with a second step were asked for. The
+course asks for a maintained identity service, not a home-made password system.
+Supabase, which already checks passwords, also offers Google sign-in (free) and
+texted codes; its own phone second factor is a paid add-on (about US$75 a month).
+**Decision.** Three ways to sign in, all checked by Supabase Auth and started by the
+server: email and password; Google, with PKCE (the code verifier stays in an HttpOnly
+cookie and the code is exchanged on the server, never in the page); and a phone
+number with a 6-digit code Supabase texts. Members may use any one. Officials sign in
+with Google or their password and then type a code texted to the phone on their
+account, so a stolen password or Google sign-in alone opens nothing; the phone way is
+not offered to officials, as it would be the same factor twice. This second step is
+built from Supabase's free texted codes, not the paid add-on. Codes are only sent to
+numbers with an active account; a waiting sign-in lasts 10 minutes and allows 5
+tries (app.signin_steps). Accounts gain a phone (`web-user add --phone`), and an
+account may have a phone only. `TWO_STEP_FOR_OFFICIALS=false` turns the second step
+off, for development only.
+**Consequences.** Supabase needs Google switched on (a Google Cloud OAuth client,
+free) with the site's callback in its redirect URLs, and an SMS provider for phone
+codes. Every real text costs money through the provider; Supabase's test numbers,
+with a fixed code, cost nothing and are enough for testing. Without phone codes
+switched on, officials cannot finish signing in unless the second step is off. A
+person who signs in by phone is a second Supabase user, so the account keeps both
+Supabase ids.
+
+## D-038 The treasurer can type a page straight in
+**Context.** Asked for at the presentation: officials want to enter a month's figures
+in Kibaba without a photo, on a ledger that already holds the members' names.
+**Decision.** "Type a page" asks only for the meeting date. It opens the review screen
+with a draft already filled from the last recorded meeting: each member on a line, a
+second line for each other loan still running, and the balance each carried as
+Balance before. The treasurer types the amounts; everything after that is a scanned
+page's path: the same checks, the edit record, Accept in date order, and the same
+pipeline run. A typed page is an upload with no photo (`source = 'typed'`), saved as
+data/raw/<chama>/scans/scan-<upload>.xlsx like a scan, and the records call it
+"Entered here". It cannot start while an accepted page is still being added, so its
+balances are always the latest.
+**Consequences.** A typed page has no photo to check it against, so the edit record
+is its only trail. Members' names come from the records, so they match at once.
+
+## D-039 One meeting may be sent in up to three photos
+**Context.** Asked for at the presentation: a page may be too big for one clear
+photo, or a meeting may run over to the next page.
+**Decision.** The Scan page takes 1 to 3 photos of one meeting, in order. Each is
+checked and stripped of its location data as before (app.upload_photos). The worker
+reads them one at a time, waiting out the free plan's per-minute limit between them
+instead of reading the earlier photos again, and joins them: member lines and new
+loans in photo order, and the meeting's date and totals from the first photo that
+has them. A different value on a later photo goes in the notes, and a line that
+appears twice gets a hint, for the reviewer. The review screen shows each photo as a
+tab. Accepted photos are kept as <chama>_pNNN.jpg, _pNNN_2.jpg and _pNNN_3.jpg.
+**Consequences.** Three photos take about three minutes on the free plan. A photo
+that is not a page, or cannot be read, fails the whole scan, naming the photo.
+
+## D-040 Each step of adding a page opens the next by itself
+**Context.** The coordinator found that, after sending a photo, officials had to use
+the menu to find the reading, the review and then the results.
+**Decision.** Every page of the flow shows the same steps: send, read, check, update
+the records, who to follow up. A finished reading opens the review by itself, Accept
+opens the records update, and when the update finishes the results open below it:
+each member on the page with their colour and the main reason, and buttons to see
+the whole chama or add the next page. The review itself stays: every row is still
+checked against the photo before it is saved (D-024).
+**Consequences.** Officials go from photo to results without the menu. Nothing is
+saved without a person's Accept.
+
+## D-041 The live release is a Hugging Face Space on PRO, keeping its records in a private bucket
+**Context.** Humble Sister will use Kibaba, so the release must be a live site, not one
+that is up only while the laptop runs a tunnel (D-034). Since July 2026 a Docker Space
+needs Hugging Face PRO (US$9 a month); on its free CPU Basic hardware a Space sleeps
+after 48 hours without visitors, and its disk is wiped at every restart, so the
+database inside the container (D-033) would lose every page added. Paid hardware that
+never sleeps costs about US$22 a month more. Alvin chose PRO with CPU Basic (11 Nov
+2026), and confirmed that the MOU with Humble Sister's officials covers hosting Kibaba,
+which D-036 had left open.
+**Decision.** Humble Sister's settings say `hosting: agreed`, and `deploy-publish` sends a
+bundle with real names only for a chama with that setting. It also makes a private
+storage bucket (`<owner>/kibaba-storage`, checked to be private, since buckets start
+public) and mounts it in the Space at /data. At start, the Space links the release
+chamas' accepted pages, their photos, the photos waiting for review and the learned
+names into the bucket, so they are written there directly. The database still runs on
+the container's own disk, as a bucket is object storage with no promise about locking
+or fsync; the worker saves it to the bucket with pg_dump within two minutes of any
+change and right after each records update, and the Space saves it again when it
+stops. The last three copies are kept, and the newest that restores whole (one
+transaction) is restored at the next start. If copies exist but none restores, the
+Space does not start, so it never saves over them. The health check says whether
+pages are kept.
+**Consequences.** The site is up whether or not the laptop is on, for US$9 a month. The
+first visitor after two quiet days waits two or three minutes. A change in the last
+moments before a crash can be lost. The records sit with Hugging Face, in a private
+dataset and bucket. A dump and restore of the release database with the Space's flags
+was rehearsed on 11 Nov 2026 (PostgreSQL 16, every table's rows equal); the image itself
+has still never been built, and whether a bucket mounts on CPU Basic is not stated by
+Hugging Face's documentation, so the first start's log and the health check are the
+test. The laptop release (D-034) stays for demonstrations offline.

@@ -93,7 +93,7 @@ a loan (G2, N1).
 
 | Criterion | Where | Status |
 | --- | --- | --- |
-| A deployed HTTPS release | Hugging Face Docker Space with its own PostgreSQL and Supabase sign-in (D-032, D-033), demo chama only: `deploy/huggingface/`, [deployment.md](deployment.md) | Pending: ready to deploy once the accounts exist |
+| A deployed HTTPS release | `serve-release` on the project laptop behind an ngrok tunnel, with Supabase sign-in (D-034), demo chama only: `deploy/huggingface/`, [deployment.md](deployment.md) | Pending: ready to deploy once the accounts exist |
 | Traceability from objectives to tests | this record | Done |
 | Usability testing with real users | [usability_test.md](usability_test.md) (script, tasks, questionnaire) | Pending: sessions with officials and members |
 | Failure-path demos | T4 (not a ledger page), T5 (wrong file), T7 (session ends), T8 (service down) | T8 seen for real; T4, T5, T7 to show |

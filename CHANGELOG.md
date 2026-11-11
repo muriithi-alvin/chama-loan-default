@@ -6,6 +6,50 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
 ## M4 — branch `m4-web-interface`
 
+### Added — the live release on Hugging Face, 11 Nov 2026
+
+- **Humble Sister may be hosted (D-041):** the MOU covers hosting Kibaba, recorded as
+  `hosting: agreed`; `deploy-publish` sends a bundle with real names only for such a chama.
+- **Records survive restarts:** `deploy-publish` makes a private storage bucket and mounts
+  it in the Space at `/data`. Pages, photos and learned names are written there, and the
+  database is saved there within two minutes of a change, after each records update and
+  when the Space stops; the newest good copy is restored at start. `/api/health` says
+  where pages are kept.
+- **The Space gets the treasurer's phone** (and the member's, if set) as secrets.
+
+### Added — after the presentation, 6 Nov 2026
+
+- **Humble Sister by its real names (D-036):** its officials agreed under an MOU. The
+  interface copy keeps chama B's names, with Beth Wamae shown as Alvin Muriithi
+  (treasurer) and Esther Mwangi as Alvin Wise (member) in the copy only, and pages
+  to July 2024 (page 128). August 2024 to April 2026 are left to enter in the interface.
+  The release serves the chamas marked `release: true`; the bundle is marked as
+  holding real names and `deploy-publish` refuses it.
+- **Sign in with Google or a phone (D-037):** Google through Supabase with PKCE, or a
+  6-digit code texted to the phone. Officials confirm every sign-in with a code
+  texted to their phone. `web-user add --phone`; `RELEASE_OFFICIAL_PHONE` for the
+  release.
+- **Type a page (D-038):** the treasurer picks the meeting date and gets the ledger
+  already filled with each member and the balance they carried; then the usual
+  checks, Accept and records update. The records label it "Entered here".
+- **Up to three photos of one meeting (D-039):** read one at a time, joined in order,
+  each shown as a tab on the review screen.
+- **The flow moves on by itself (D-040):** a step bar on every page; the reading
+  opens the review, Accept opens the update, and the results (each member's colour
+  and main reason) open when the update is done.
+- **Fixed:** two pages accepted before the first finished updating could be for the
+  same month; Accept now also checks pages accepted but not yet in the records.
+
+### Fixed — before the presentation, 5 Nov 2026
+
+- **Good readings no longer fail on field names (D-035):** the free model sometimes
+  uses its own field names, which made clear pages and non-ledger photos end in a
+  technical "could not be read" message.
+- **The release's member account is Kawira Mutembei:** Muthoni Ndegwa's KSh 460,000 is
+  a rebuilt second loan from a 23,000 / 230,000 slip on page 149, still to be checked
+  against the paper ledger.
+- **`serve-release --fresh` also deletes the demo chama's scan photos.**
+
 ### Changed — after the Sprint II review (reviewers: too plain, too technical)
 
 - **Plain words for the bands:** "Follow up now", "Keep an eye on" and "Less
@@ -48,6 +92,9 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
   image installs the project's exact library versions (`constraints.txt`) and
   runs its own PostgreSQL, loaded with the demo chama and its two accounts at
   each start (D-033); `CHAMA_ONLY` and `MODEL_BUNDLE` settings for the cloud.
+- **The release on the laptop (D-034):** Hugging Face now charges for Docker
+  Spaces, so `serve-release` runs the release on the laptop for an ngrok tunnel,
+  with its own database holding only the demo chama.
 - **Sprint III records:** `docs/traceability.md` (objectives to requirements to
   tests) and `docs/usability_test.md` (tasks, questionnaire, record sheet).
 
