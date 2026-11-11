@@ -5,13 +5,13 @@ import { BeadCollar } from "@/components/bead-collar";
 import { Logo } from "@/components/beads";
 import { Cooking, Singing } from "@/components/figurines";
 import { apiGetOptional } from "@/lib/server-api";
-import type { Me } from "@/lib/types";
+import type { Me, Site } from "@/lib/types";
 
 import { SignInForm } from "./signin-form";
 
 export const metadata: Metadata = { title: "Sign in" };
 
-type Search = Promise<{ ended?: string; next?: string }>;
+type Search = Promise<{ ended?: string; next?: string; step?: string; error?: string }>;
 
 function safeNext(next: string | undefined): string | undefined {
   // only a page on this site, never another address
@@ -19,10 +19,10 @@ function safeNext(next: string | undefined): string | undefined {
 }
 
 export default async function SignInPage({ searchParams }: { searchParams: Search }) {
-  const { ended, next } = await searchParams;
+  const { ended, next, step, error } = await searchParams;
   const [me, site] = await Promise.all([
     apiGetOptional<Me>("/api/me"),
-    apiGetOptional<{ sign_in_ready: boolean }>("/api/site"),
+    apiGetOptional<Site>("/api/site"),
   ]);
   if (me) redirect(me.user.role === "member" ? "/m" : "/o");
 
@@ -54,8 +54,8 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
                 Officials see which members to follow up and why. Members see their own records.
               </p>
             </div>
-            <SignInForm ended={ended === "1"} next={safeNext(next)} ready={site?.sign_in_ready ?? true}
-              serverDown={site === null} />
+            <SignInForm ended={ended === "1"} next={safeNext(next)} site={site} serverDown={site === null}
+              step={step === "code" ? "code" : undefined} error={error && /^[a-z_]{2,40}$/.test(error) ? error : undefined} />
             <div className="flex items-start gap-3 border-t border-line pt-5">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#187A42" strokeWidth="2.2"
                 strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-px shrink-0">
@@ -63,8 +63,8 @@ export default async function SignInPage({ searchParams }: { searchParams: Searc
                 <path d="M8 11V8a4 4 0 0 1 8 0v3" />
               </svg>
               <p className="text-[15px] text-muted">
-                Names stay private inside the system. Members see only their own records, and ledger photos are
-                shown only to officials.
+                Members see only their own records, and ledger photos are shown only to officials, who confirm
+                each sign-in with a code texted to their phone.
               </p>
             </div>
           </div>

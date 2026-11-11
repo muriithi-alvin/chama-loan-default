@@ -66,6 +66,14 @@ def _route(request: Request) -> str:
     return getattr(route, "path", request.url.path)
 
 
+def as_response(request: Request, exc: ApiError) -> JSONResponse:
+    """The error as a response the route returns itself, so that what the route
+    wrote first (a wrong code's count) is still saved: a raised error rolls back."""
+    ref = new_reference()
+    log.info("%s %s -> %s %s ref=%s", request.method, _route(request), exc.status, exc.code, ref)
+    return JSONResponse(_body(exc.code, exc.message, ref, exc.field), status_code=exc.status)
+
+
 async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
     ref = new_reference()
     request.state.error_ref = ref

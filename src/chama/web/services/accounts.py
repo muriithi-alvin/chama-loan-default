@@ -1,36 +1,45 @@
 """Accounts for the web interface, set up by the admin from the command line (R3).
 
-    python -m chama.pipeline web-user add --email <email> --role official --chama chama_demo
-        --name "Grace Achieng" --position treasurer
-    python -m chama.pipeline web-user add --email <email> --role member --chama chama_demo
-        --member <code>
+    python -m chama.pipeline web-user add --email <email> --phone 07XXXXXXXX --role official
+        --chama chama_demo --name "Alvin Muriithi" --position treasurer
+    python -m chama.pipeline web-user add --email <email> --phone 07XXXXXXXX --role member
+        --chama chama_demo --member <code>
     python -m chama.pipeline web-user list
     python -m chama.pipeline web-user deactivate --email <email>
 
 To change an account (another member, role or chama), deactivate it, then add
 the same email again with the new details: the account is reopened.
 
-The password is set in Supabase (Authentication > Users > Add user); this
-only says which chama, role and member record the email may open.
+Signing in is Supabase's (D-037): a password set in Supabase (Authentication >
+Users > Add user), Google with the same email, or a code texted to the phone.
+This only says which chama, role and member record the email or phone may
+open. Officials need a phone: each sign-in is confirmed with a texted code.
 """
 from __future__ import annotations
 
 from sqlalchemy import text
 
 from chama import StepFailed
+from chama.web.auth import normalise_phone
 from chama.web.data import users
 from chama.web.services.names import display_name, member_names
-from chama.web.settings import chamas
+from chama.web.settings import chamas, web_settings
 
 ROLES = ("official", "member", "admin")
 POSITIONS = ("chair", "treasurer", "secretary")
 
 
-def add_user(engine, email: str, role: str, chama_id: str, member_code: str | None,
-             name: str | None, position: str | None) -> str:
-    email = email.strip()
-    if "@" not in email:
+def add_user(engine, email: str | None, role: str, chama_id: str, member_code: str | None,
+             name: str | None, position: str | None, phone: str | None = None) -> str:
+    email = (email or "").strip() or None
+    if email is None and not phone:
+        raise StepFailed("An account needs --email, --phone or both.")
+    if email is not None and "@" not in email:
         raise StepFailed(f"{email!r} is not an email address.")
+    if phone:
+        written, phone = phone, normalise_phone(phone, web_settings().phone_country)
+        if phone is None:
+            raise StepFailed(f"{written!r} is not a phone number: write it as 07XXXXXXXX or +2547XXXXXXXX.")
     if role not in ROLES:
         raise StepFailed(f"Role must be one of {', '.join(ROLES)}.")
     if chama_id not in chamas():
@@ -43,9 +52,12 @@ def add_user(engine, email: str, role: str, chama_id: str, member_code: str | No
     if position and position not in POSITIONS:
         raise StepFailed(f"Position must be one of {', '.join(POSITIONS)}.")
     with engine.begin() as conn:
-        existing = users.by_email(conn, email)
+        existing = users.by_email(conn, email) if email else users.by_phone(conn, phone)
         if existing and existing.active:
-            raise StepFailed(f"{email} already has an account. Deactivate it first to change it.")
+            raise StepFailed(f"{email or phone} already has an account. Deactivate it first to change it.")
+        holder = users.by_phone(conn, phone) if phone else None
+        if holder and (existing is None or holder.id != existing.id):
+            raise StepFailed(f"{phone} is already the phone of another account ({holder.email or holder.id}).")
         if member_code:
             known = conn.execute(text("SELECT 1 FROM private.member_codes WHERE chama_id = :c "
                                       "AND member_code = :m"), {"c": chama_id, "m": member_code}).first()
@@ -54,11 +66,15 @@ def add_user(engine, email: str, role: str, chama_id: str, member_code: str | No
                                  "python -m chama.pipeline web-user codes --chama " + chama_id)
         details = (role, chama_id, member_code, name if role != "member" else None, position)
         if existing:
-            users.reopen(conn, existing.id, *details)
+            users.reopen(conn, existing.id, *details, phone=phone)
         else:
-            users.add(conn, email, *details)
+            users.add(conn, email, *details, phone=phone)
     done = "Reopened" if existing else "Added"
-    return f"{done} {role} {email} for {chama_id}" + (f" (member {member_code})" if member_code else "")
+    note = ""
+    if role != "member" and not phone and web_settings().two_step_for_officials:
+        note = ". No phone: officials confirm each sign-in with a texted code, so add one with --phone"
+    return (f"{done} {role} {email or phone} for {chama_id}" + (f" (member {member_code})" if member_code else "")
+            + (f", phone {phone}" if phone and email else "") + note)
 
 
 def list_users(engine) -> list[str]:
@@ -70,13 +86,16 @@ def list_users(engine) -> list[str]:
     for u in rows:
         state = "active" if u.active else "deactivated"
         who = u.member_code or (u.display_name or "") + (f", {u.position}" if u.position else "")
-        lines.append(f"{u.id:>3}  {u.email:<34} {u.role:<9} {u.chama_id:<11} {who:<28} {state}")
+        lines.append(f"{u.id:>3}  {u.email or '-':<34} {u.phone or '-':<14} {u.role:<9} {u.chama_id:<11} "
+                     f"{who:<28} {state}")
     return lines
 
 
 def deactivate_user(engine, email: str) -> str:
+    """By the account's email, or its phone for a phone-only account."""
     with engine.begin() as conn:
-        user = users.by_email(conn, email)
+        phone = None if "@" in email else normalise_phone(email, web_settings().phone_country)
+        user = users.by_phone(conn, phone) if phone else users.by_email(conn, email)
         if not user:
             raise StepFailed(f"No account for {email}.")
         users.set_active(conn, user.id, False)
