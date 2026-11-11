@@ -22,7 +22,7 @@ import pydantic
 
 from chama import StepFailed
 from chama.extraction.prompt import SYSTEM_PROMPT, USER_PROMPT
-from chama.extraction.schema import LedgerPage, page_schema
+from chama.extraction.schema import LedgerPage, page_schema, repaired_page
 
 
 class ExtractionFailed(StepFailed):
@@ -135,10 +135,13 @@ class OpenAICompatibleExtractor:
         choice = data["choices"][0]
         if choice.get("finish_reason") == "length":
             raise ExtractionFailed(CUT_OFF)
+        content = choice["message"].get("content") or ""
         try:
-            page = LedgerPage.model_validate_json(choice["message"].get("content") or "")
+            page = LedgerPage.model_validate_json(content)
         except pydantic.ValidationError as e:
-            raise ExtractionFailed(UNREADABLE) from e
+            page = repaired_page(content)
+            if page is None:
+                raise ExtractionFailed(UNREADABLE) from e
         usage = data.get("usage") or {}
         return Extraction(
             page=page,
