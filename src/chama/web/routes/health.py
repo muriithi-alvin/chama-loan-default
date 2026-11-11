@@ -1,5 +1,6 @@
 """The health check (S-5): ready only when the database answers and the
-worker has loaded the chosen model."""
+worker has loaded the chosen model. It also says whether pages added here
+are kept across restarts (the cloud release's storage bucket, D-041)."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -36,6 +37,8 @@ def health_report() -> tuple[bool, dict]:
 
 @router.get("/health")
 def health() -> JSONResponse:
+    from chama.release_storage import status
+
     ready, parts = health_report()
-    return JSONResponse({"status": "ready" if ready else "not ready", "parts": parts},
+    return JSONResponse({"status": "ready" if ready else "not ready", "parts": parts, "storage": status()},
                         status_code=200 if ready else 503)

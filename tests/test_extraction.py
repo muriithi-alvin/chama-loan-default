@@ -249,6 +249,50 @@ def test_openai_style_extractor_explains_failures(monkeypatch, client_args, mess
         OpenAICompatibleExtractor(GROQ, openai_client(**client_args)).extract(b"jpeg")
 
 
+def test_a_reading_under_other_field_names_is_kept_for_review(monkeypatch):
+    monkeypatch.setenv("TEST_EXTRACTION_KEY", "secret")
+    content = json.dumps({
+        "is_ledger_page": True,
+        "meeting": {"meet_date": "3rd MAY 2026", "headings": "No | Name", "total_monthly": "2,800", "notes": "LOANS"},
+        "statements": [{"no": "1", "name": "A", "monthly": "350", "loan_before": "1,000", "repayment": "100",
+                        "interest": None, "loan_after": "900", "stamp": "seen", "unclear": True}],
+        "new_loans": [{"name": "B", "amount": "50,000", "remarks": ""}],
+    })
+    page = OpenAICompatibleExtractor(GROQ, openai_client(content=content)).extract(b"jpeg").page
+    assert page.is_ledger_page and page.problem == ""
+    assert page.meeting.meeting_date == "3rd MAY 2026" and page.meeting.column_headers == "No | Name"
+    assert page.meeting.notes == "LOANS; total_monthly: 2,800"
+    line = page.statements[0]
+    assert (line.line_no, line.member_name, line.loan_after, line.interest) == ("1", "A", "900", "")
+    assert line.remarks == "stamp: seen" and line.unclear is True
+    assert (page.new_loans[0].member_name, page.new_loans[0].amount, page.new_loans[0].loan_date) == ("B", "50,000", "")
+
+
+def test_a_stray_value_is_not_shown_as_a_problem_with_the_page(monkeypatch):
+    monkeypatch.setenv("TEST_EXTRACTION_KEY", "secret")
+    content = json.dumps({"is_ledger_page": True, "problem": "true", "written": "7th JUNE 2026", "meeting": {},
+                          "statements": [{"name": "A", "loan_after": "900"}], "new_loans": []})
+    page = OpenAICompatibleExtractor(GROQ, openai_client(content=content)).extract(b"jpeg").page
+    assert page.problem == ""
+    assert page.meeting.notes == "7th JUNE 2026"
+
+
+def test_a_refusal_under_other_field_names_is_still_a_refusal(monkeypatch):
+    monkeypatch.setenv("TEST_EXTRACTION_KEY", "secret")
+    content = '{"is_ledger_page": false, " HISTORY": "This is a shopping list.", "meeting": {}, "statements": [], "new_loans": []}'
+    page = OpenAICompatibleExtractor(GROQ, openai_client(content=content)).extract(b"jpeg").page
+    assert not page.is_ledger_page
+    assert page.problem == "This is a shopping list."
+    assert page.statements == [] and page.meeting.meeting_date == ""
+
+
+@pytest.mark.parametrize("content", ["[1, 2]", '{"statements": []}', '{"is_ledger_page": true, "statements": []}'])
+def test_an_answer_about_no_page_at_all_stays_unreadable(monkeypatch, content):
+    monkeypatch.setenv("TEST_EXTRACTION_KEY", "secret")
+    with pytest.raises(ExtractionFailed, match="could not be read"):
+        OpenAICompatibleExtractor(GROQ, openai_client(content=content)).extract(b"jpeg")
+
+
 def test_a_missing_key_is_named(monkeypatch):
     monkeypatch.delenv("TEST_EXTRACTION_KEY", raising=False)
     with pytest.raises(ExtractionFailed, match="TEST_EXTRACTION_KEY is missing"):

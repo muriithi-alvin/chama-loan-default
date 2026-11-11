@@ -2,11 +2,17 @@
 
 Takes jobs from app.jobs with SELECT ... FOR UPDATE SKIP LOCKED (no Redis):
 
-- read_photo: the vision model reads an uploaded page into a draft for review.
-  A rate limit, timeout or outage is tried again up to 3 times, waiting
-  longer each time, on the same job and upload; then the scan shows "failed"
-  with the reason and a Retry button.
+- read_photo: the vision model reads an uploaded page into a draft for review;
+  a meeting in several photos is read one photo at a time and joined (D-039).
+  The free plan allows about one photo a minute, so a rate limit between the
+  photos is waited out here. A rate limit, timeout or outage is otherwise tried
+  again up to 3 times, waiting longer each time, on the same job and upload;
+  then the scan shows "failed" with the reason and a Retry button.
 - run_pipeline: the steps after Accept (services/pipeline_run.py).
+
+In the cloud release (BACKUP_DIR set) it also saves the database to the
+storage bucket when it has changed and right after each records update
+(release_storage.py, D-041).
 
 It loads the chosen model once at start, and tells the health check it is
 alive every 10 seconds. Logs hold upload and member codes, never names.
@@ -33,6 +39,7 @@ log = logging.getLogger("chama.worker")
 
 MAX_ATTEMPTS = 3
 WAITS = [20, 60, 120]   # seconds before each new try after a rate limit or outage
+PART_WAITS = [30, 45, 60]   # within one job: before reading the next photo of a meeting again
 NOT_A_PAGE = ("This photo does not look like a page of the chama's ledger, or it is too blurred, dark or cut "
               "off to read. Take the photo again: the whole page in view, flat, in good light.")
 
@@ -45,13 +52,48 @@ def read_photo(engine, config: dict, job: dict) -> None:
     settings = config["extraction"]
     with engine.begin() as conn:
         upload = scans.upload_row(conn, job["upload_id"])
+        parts = scans.photo_parts(conn, upload)
         scans.set_upload(conn, upload["id"], status="reading", problem=None)
         scans.set_job_step(conn, job["id"], "reading")
+        if not parts:
+            scans.set_upload(conn, upload["id"], status="failed", problem="The photo is no longer on the server.")
+            scans.finish_job(conn, job["id"], "failed", "image", "no photo")
+            return
     provider, _ = provider_settings(settings)
+    notes = chamas().get(upload["chama_id"], {}).get("reading_notes", "")
+    extractor = make_extractor(settings)
+    readings = []
+
+    def which(n: int) -> str:
+        return f"Photo {n} of {len(parts)}: " if len(parts) > 1 else ""
+
     try:
-        notes = chamas().get(upload["chama_id"], {}).get("reading_notes", "")
-        extraction = model_read(Path(upload["photo_path"]), settings, make_extractor(settings), notes)
+        for n, path in enumerate(parts, start=1):
+            with engine.begin() as conn:
+                scans.set_job_step(conn, job["id"], f"reading photo {n} of {len(parts)}")
+            for wait in [*PART_WAITS, None]:
+                try:
+                    readings.append(model_read(Path(path), settings, extractor, notes))
+                    break
+                except ExtractionFailed as e:
+                    # A later photo meets the per-minute limit the earlier ones used up: wait here,
+                    # so the photos already read are not read again
+                    if not (e.transient and n > 1 and wait):
+                        raise
+                    log.info("upload %s: photo %s of %s waits %s s for the rate limit", upload["id"], n,
+                             len(parts), wait)
+                    time.sleep(wait)
+            page = readings[-1].page
+            if not page.is_ledger_page:
+                problem = which(n) + NOT_A_PAGE + (f" The model said: {page.problem}" if page.problem else "")
+                with engine.begin() as conn:
+                    scans.set_upload(conn, upload["id"], status="failed", problem=problem,
+                                     model=readings[-1].model, seconds=sum(r.seconds for r in readings))
+                    scans.finish_job(conn, job["id"], "failed", "not_a_page", problem)
+                log.info("upload %s: photo %s is not a ledger page", upload["id"], n)
+                return
     except ExtractionFailed as e:
+        e = type(e)(which(len(readings) + 1) + str(e), e.transient) if len(parts) > 1 else e
         with engine.begin() as conn:
             if e.transient and job["attempts"] < MAX_ATTEMPTS:
                 wait = WAITS[job["attempts"] - 1]
@@ -71,26 +113,19 @@ def read_photo(engine, config: dict, job: dict) -> None:
             scans.finish_job(conn, job["id"], "failed", "image", message)
         return
 
-    page = extraction.page
+    frames = scan_service.merge_parts([page_to_frames(r.page, "upload") for r in readings])
+    noted = [f"{which(n)}{r.page.problem}" for n, r in enumerate(readings, start=1) if r.page.problem]
+    seconds = sum(r.seconds for r in readings)
     with engine.begin() as conn:
-        if not page.is_ledger_page:
-            problem = NOT_A_PAGE + (f" The model said: {page.problem}" if page.problem else "")
-            scans.set_upload(conn, upload["id"], status="failed", problem=problem, model=extraction.model,
-                             seconds=extraction.seconds)
-            scans.finish_job(conn, job["id"], "failed", "not_a_page", problem)
-            log.info("upload %s: not a ledger page", upload["id"])
-            return
-        frames = page_to_frames(page, "upload")
         scan_service.write_draft(conn, upload["id"], frames, upload["chama_id"])
-        scans.set_upload(conn, upload["id"], status="ready", provider=provider, model=extraction.model,
-                         seconds=extraction.seconds,
-                         problem=(f"The model noted: {page.problem}" if page.problem else None))
+        scans.set_upload(conn, upload["id"], status="ready", provider=provider, model=readings[-1].model,
+                         seconds=seconds, problem=(f"The model noted: {' '.join(noted)}" if noted else None))
         scans.finish_job(conn, job["id"], "done")
-    log.info("upload %s: ready for review (%s statement lines, %.1f s)", upload["id"],
-             len(frames["statements"]), extraction.seconds)
+    log.info("upload %s: ready for review (%s photos, %s statement lines, %.1f s)", upload["id"], len(parts),
+             len(frames["statements"]), seconds)
 
 
-def run_pipeline(engine, config: dict, job: dict, model) -> None:
+def run_pipeline(engine, config: dict, job: dict, model, saver=None) -> None:
     try:
         pipeline_run.run_pipeline(engine, config, pseudonym_key(), job["upload_id"], model,
                                   log=lambda m: log.info("upload %s: %s", job["upload_id"], m))
@@ -101,6 +136,8 @@ def run_pipeline(engine, config: dict, job: dict, model) -> None:
         return
     with engine.begin() as conn:
         scans.finish_job(conn, job["id"], "done")
+    if saver is not None:
+        saver.save_now()          # the new page's records are the ones most worth keeping
 
 
 class Heartbeat(threading.Thread):
@@ -139,6 +176,14 @@ def main() -> None:
     log.info("model version %s loaded (run %s, checksum %s); waiting for jobs",
              model.version, model.run_id[:8], (model.checksum or "")[:12])
 
+    from chama.release_storage import Saver, base_dir
+
+    saver = None
+    if base_dir() is not None:
+        saver = Saver(engine, base_dir(), log=log.info)
+        saver.start()
+        log.info("saving the database to the storage bucket at %s when it changes", base_dir())
+
     with engine.begin() as conn:
         released = scans.release_stuck_jobs(conn, minutes=0)
     if released:
@@ -156,7 +201,7 @@ def main() -> None:
                 if job["kind"] == "read_photo":
                     read_photo(engine, config, job)
                 else:
-                    run_pipeline(engine, config, job, model)
+                    run_pipeline(engine, config, job, model, saver)
             except Exception as e:  # noqa: BLE001 - one bad job must not stop the worker
                 # where it stopped, without the error's text, which could hold a value from the page
                 where = "".join(traceback.format_tb(e.__traceback__)[-4:])

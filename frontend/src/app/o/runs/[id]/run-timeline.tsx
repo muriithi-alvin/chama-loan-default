@@ -1,11 +1,13 @@
 "use client";
 
-import { ArrowRight, RotateCw } from "lucide-react";
-import { motion } from "motion/react";
+import { ArrowRight, Camera, Keyboard, RotateCw } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 
+import { BandChip, NoLoanChip } from "@/components/beads";
+import { FlowSteps } from "@/components/flow-steps";
 import { Card } from "@/components/page-header";
 import { ServiceError } from "@/components/service-error";
 import { api, ApiProblem, fetcher } from "@/lib/client-api";
@@ -27,12 +29,26 @@ function seconds(from: string | null, to: string | null): string | null {
 
 // One bead per step on a string: filled when done, a gentle pulse while
 // running, red with "!" and the reason on failure (OFF-11). Polls every 2 s.
+// When it is done the results open below by themselves: each member on the
+// page with their new colour and the main reason (D-040).
 export function RunTimeline({ id }: { id: number }) {
   const { data, error, mutate } = useSWR<Run>(`/api/runs/${id}`, fetcher, {
     refreshInterval: (latest) => (!latest || latest.status === "queued" || latest.status === "running" ? 2000 : 0),
   });
   const [retrying, setRetrying] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const results = useRef<HTMLElement>(null);
+  const reduce = useReducedMotion();
+  const done = data?.status === "done";
+
+  useEffect(() => {
+    if (!done) return;
+    const t = window.setTimeout(() => {
+      results.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+      results.current?.focus({ preventScroll: true });
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [done, reduce]);
 
   if (error && !data) {
     return <ServiceError message={error instanceof ApiProblem ? error.message : "The run could not be loaded."}
@@ -57,8 +73,11 @@ export function RunTimeline({ id }: { id: number }) {
     queued: "Waiting for the worker", running: "Running", done: "Done: the records and bands are up to date", failed: "Stopped",
   }[data.status];
 
+  const follow = data.changed_members.filter((m) => m.band === "high" || m.band === "medium");
+
   return (
     <div className="flex flex-col gap-6">
+      <FlowSteps at={done ? "results" : "update"} typed={data.source === "typed"} failed={data.status === "failed"} />
       <p aria-live="polite" className="font-display text-[28px] font-extrabold leading-tight">
         {headline}
         {data.page_no ? <span className="block font-sans text-[16px] font-normal text-muted">Ledger page {data.page_no}{data.finished_at && data.started_at ? `, ${seconds(data.started_at, data.finished_at)} in all` : ""}</span> : null}
@@ -110,22 +129,45 @@ export function RunTimeline({ id }: { id: number }) {
         </div>
       )}
 
-      {data.status === "done" && (
-        <Card tone="ice" className="flex flex-col gap-3">
-          <h2 className="text-[22px]">Members on this page</h2>
-          <ul className="flex flex-wrap gap-2">
-            {data.changed_members.map((m) => (
-              <li key={m.code}>
-                <Link href={`/o/members/${m.code}`} className="inline-flex min-h-11 items-center rounded-full bg-white px-4 text-[15px] font-bold no-underline hover:bg-cobalt hover:text-white">
-                  {m.name}
+      {done && (
+        <motion.section ref={results} tabIndex={-1} aria-labelledby="run-results"
+          initial={reduce ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}
+          className="flex scroll-mt-6 flex-col gap-4 rounded-card bg-ice p-6 focus:outline-none sm:p-7">
+          <div className="flex flex-col gap-1">
+            <h2 id="run-results" className="text-[26px]">Who to follow up after page {data.page_no}</h2>
+            <p className="text-[16px] text-subtle">
+              {follow.length === 0
+                ? "Nobody on this page needs following up now."
+                : `${follow.length} ${follow.length === 1 ? "member needs" : "members need"} a word before the next meeting. This is a prompt to follow up, not a decision.`}
+            </p>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {data.changed_members.map((m, i) => (
+              <motion.li key={m.code} initial={reduce ? false : { opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: reduce ? 0 : 0.15 + i * 0.05 }}>
+                <Link href={`/o/members/${m.code}`}
+                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 rounded-button bg-white px-4 py-3 text-ink no-underline hover:shadow-[0_2px_10px_rgba(20,33,61,.10)] hover:text-ink">
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-[17px] font-bold">{m.name}</span>
+                    {m.reason && <span className="text-[15px] text-muted">{m.reason}</span>}
+                  </span>
+                  {m.band ? <BandChip band={m.band} /> : <NoLoanChip />}
                 </Link>
-              </li>
+              </motion.li>
             ))}
           </ul>
-          <Link href="/o" className="inline-flex min-h-12 items-center gap-2 self-start rounded-button bg-cobalt px-5 text-[16px] font-bold text-white no-underline hover:bg-cobalt-dark hover:text-white">
-            See the new bands <ArrowRight aria-hidden="true" size={18} />
-          </Link>
-        </Card>
+          <div className="flex flex-wrap gap-3 pt-1">
+            <Link href="/o" className="inline-flex min-h-12 items-center gap-2 rounded-button bg-cobalt px-5 text-[16px] font-bold text-white no-underline hover:bg-cobalt-dark hover:text-white">
+              See the whole chama <ArrowRight aria-hidden="true" size={18} />
+            </Link>
+            <Link href="/o/scan" className="inline-flex min-h-12 items-center gap-2 rounded-button border-2 border-ink px-5 text-[16px] font-bold text-ink no-underline hover:bg-white hover:text-ink">
+              <Camera aria-hidden="true" size={18} /> Scan the next page
+            </Link>
+            <Link href="/o/type" className="inline-flex min-h-12 items-center gap-2 rounded-button border-2 border-ink px-5 text-[16px] font-bold text-ink no-underline hover:bg-white hover:text-ink">
+              <Keyboard aria-hidden="true" size={18} /> Type the next page
+            </Link>
+          </div>
+        </motion.section>
       )}
     </div>
   );

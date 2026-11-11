@@ -26,6 +26,8 @@ class WebSettings:
     session_hours: int
     allowed_origins: tuple[str, ...]
     log_dir: Path
+    two_step_for_officials: bool = True   # officials confirm each sign-in with a texted code (D-037)
+    phone_country: str = "254"            # for numbers written as 07..., 01... (Kenya)
 
     @property
     def supabase_ready(self) -> bool:
@@ -49,6 +51,8 @@ def web_settings() -> WebSettings:
         allowed_origins=tuple(o.strip().rstrip("/") for o in origins.split(",") if o.strip()),
         # tests write to a folder of their own, so web-stats shows real use only
         log_dir=Path(os.getenv("WEB_LOG_DIR", "").strip() or PROJECT_ROOT / "data" / "logs"),
+        two_step_for_officials=_flag("TWO_STEP_FOR_OFFICIALS", True),
+        phone_country=os.getenv("PHONE_COUNTRY_CODE", "").strip().lstrip("+") or "254",
     )
 
 

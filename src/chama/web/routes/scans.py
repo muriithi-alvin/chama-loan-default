@@ -6,9 +6,10 @@ signed-in chama only.
 """
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, File, Form, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -40,9 +41,12 @@ def _upload_view(upload: dict, job: dict | None, run: dict | None) -> dict:
         "seconds": upload["seconds"],
         "page_no": upload["page_no"],
         "meeting_date": upload["meeting_date"],
+        "source": upload.get("source") or "photo",
+        "parts": upload.get("parts") or (1 if upload.get("photo_path") else 0),
         "created_at": upload["created_at"],
         "accepted_at": upload["accepted_at"],
         "attempts": job["attempts"] if job else 0,
+        "step": job["step"] if job and job["status"] == "running" else None,   # "reading photo 2 of 3"
         "run_id": run["id"] if run else None,
         "run_status": run["status"] if run else None,
     }
@@ -50,15 +54,38 @@ def _upload_view(upload: dict, job: dict | None, run: dict | None) -> dict:
 
 @router.post("/uploads")
 async def upload_photo(conn: Conn, user: auth.Official,
-                       photo: Annotated[UploadFile, File()],
+                       photos: Annotated[list[UploadFile] | None, File()] = None,
+                       photo: Annotated[UploadFile | None, File()] = None,
                        idempotency_key: Annotated[str, Form()] = "") -> dict:
-    data_bytes = await photo.read(MAX_FILE_BYTES + 1)
+    """One meeting's page in up to 3 photos (`photos`, in order), or one (`photo`)."""
+    sent = [f for f in (photos or []) + ([photo] if photo else []) if f is not None]
+    if len(sent) > scans.MAX_PARTS:
+        raise ApiError(422, "too_many", f"Send at most {scans.MAX_PARTS} photos of one meeting.", field="photo")
+    parts = [(await f.read(MAX_FILE_BYTES + 1), f.content_type) for f in sent]
     config = load_config()
     provider, _ = provider_settings(config["extraction"])
-    upload, created = scans.save_upload(conn, user.chama_id, user.id, data_bytes, photo.content_type,
-                                        idempotency_key, config["extraction"], provider)
+    upload, created = scans.save_upload(conn, user.chama_id, user.id, parts, idempotency_key,
+                                        config["extraction"], provider)
     return {"upload": _upload_view(upload, data.job_for(conn, upload["id"], "read_photo"), None),
             "created": created}
+
+
+class TypedPage(BaseModel):
+    meeting_date: date
+    idempotency_key: str = ""
+
+
+@router.get("/typed")
+def typed_info(conn: Conn, user: auth.Official) -> dict:
+    """For the Type-a-page form: the last recorded meeting and its members (D-038)."""
+    return scans.typed_start_info(conn, user.chama_id)
+
+
+@router.post("/typed")
+def typed_start(body: TypedPage, conn: Conn, user: auth.Official) -> dict:
+    """A page to type in, filled with the members and the balances they carried."""
+    upload, created = scans.start_typed(conn, user.chama_id, user.id, body.meeting_date, body.idempotency_key)
+    return {"upload": _upload_view(upload, None, None), "created": created}
 
 
 @router.get("/uploads")
@@ -77,12 +104,16 @@ def upload_status(upload_id: int, conn: Conn, user: auth.Official) -> dict:
 
 
 @router.get("/uploads/{upload_id}/photo")
-def upload_photo_file(upload_id: int, conn: Conn, user: auth.Official) -> FileResponse:
+def upload_photo_file(upload_id: int, conn: Conn, user: auth.Official,
+                      part: Annotated[int, Query(ge=1, le=3)] = 1) -> FileResponse:
     upload = scans.require(conn, upload_id, user.chama_id)
-    refusal = scans.photo_refusal(upload)
+    files = scans.photo_files(conn, upload)
+    refusal = scans.photo_refusal(upload, files)
     if refusal:
         raise ApiError(404, "no_photo", refusal)
-    return FileResponse(scans.photo_path(upload), media_type="image/jpeg", headers=PRIVATE)
+    if part > len(files):
+        raise ApiError(404, "no_photo", f"This scan has {len(files)} photo{'s' if len(files) > 1 else ''}.")
+    return FileResponse(files[part - 1], media_type="image/jpeg", headers=PRIVATE)
 
 
 @router.post("/uploads/{upload_id}/retry")
@@ -164,9 +195,18 @@ def run(run_id: int, conn: Conn, user: auth.Official) -> dict:
     changed = []
     if found["status"] == "done":
         names = member_names(conn, user.chama_id)
-        changed = [{"code": code, "name": display_name(names, code)}
-                   for code in data.members_on_page(conn, user.chama_id, upload["page_no"] or 0)]
-    return {**found, "page_no": upload["page_no"], "steps": steps, "changed_members": changed}
+        scored = {s["member_code"]: s for s in data.scores_on_page(conn, user.chama_id, upload["page_no"] or 0)}
+        order = {"high": 0, "medium": 1, "low": 2}
+        for code in data.members_on_page(conn, user.chama_id, upload["page_no"] or 0):
+            score = scored.get(code)
+            reasons = (score or {}).get("reasons") or []
+            reason = next((r for r in reasons if r.get("effect") == "raises risk"), reasons[0] if reasons else None)
+            changed.append({"code": code, "name": display_name(names, code),
+                            "band": score["band"] if score else None,
+                            "reason": reason["sentence"] if reason else None})
+        changed.sort(key=lambda m: (order.get(m["band"], 3), m["name"]))
+    return {**found, "page_no": upload["page_no"], "source": upload["source"], "steps": steps,
+            "changed_members": changed}
 
 
 @router.get("/edits")

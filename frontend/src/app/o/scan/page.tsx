@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { FlowSteps } from "@/components/flow-steps";
 import { PageBody, PageHeader } from "@/components/page-header";
 
 import { ScanForm } from "./scan-form";
@@ -10,6 +11,7 @@ export default function ScanPage() {
   return (
     <PageBody className="max-w-[960px]">
       <PageHeader title="Scan a page" tone="ice" sub="Photograph this month's ledger page. You will check every row before it is saved." />
+      <FlowSteps at="send" />
       <ScanForm />
     </PageBody>
   );

@@ -37,7 +37,7 @@ export default async function MeetingDetail({ params }: { params: Params }) {
       <PageHeader
         crumbs={<><Link href="/o/records/meetings">Records</Link><span aria-hidden="true" className="mx-2">/</span>Page {m.page_no}</>}
         title={`Meeting of ${when}`}
-        sub={`Ledger page ${m.page_no}, ${m.source === "scanned" ? "scanned and checked here" : "typed from the ledger"}${m.date_estimated ? "; the month is worked out from the pages around it" : ""}`}
+        sub={`Ledger page ${m.page_no}, ${m.source === "scanned" ? "scanned and checked here" : m.source === "entered" ? "typed in here by the treasurer" : "typed from the ledger"}${m.date_estimated ? "; the month is worked out from the pages around it" : ""}`}
         action={
           <div className="flex gap-2">
             {m.previous && (

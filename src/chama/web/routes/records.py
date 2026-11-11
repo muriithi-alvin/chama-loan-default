@@ -33,7 +33,7 @@ def meeting_photo(page_no: int, conn: Conn, user: auth.Official) -> FileResponse
     page = records_data.meeting(conn, user.chama_id, page_no)
     if page is None:
         raise not_found(f"Ledger page {page_no}")
-    refusal = records.photo_refusal(user.chama_id, page)
+    refusal = records.photo_refusal(user.chama_id, page, records.entered_uploads(conn, user.chama_id))
     if refusal:
         raise ApiError(404, "no_photo", refusal)
     path = records.photo_file(user.chama_id, page["source_photo"])

@@ -1,7 +1,8 @@
 """The records pages: meetings list and meeting page (OFF-5, OFF-6).
 
-A page was typed (from the yearly Excel files) or scanned (accepted from the
-Scan page, saved as data/raw/<chama>/scans/scan-<upload>.xlsx, see scans.py).
+A page was typed (from the yearly Excel files), scanned (accepted from the
+Scan page, saved as data/raw/<chama>/scans/scan-<upload>.xlsx, see scans.py)
+or entered (typed into Kibaba by the treasurer, saved the same way, D-038).
 
 Ledger photos show every member's real name, so a photo is shown only to
 officials, never in demo mode for a typed page, and never for a demo chama's
@@ -10,8 +11,10 @@ typed pages, whose real photos belong to the chama they were copied from
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from chama.config import PROJECT_ROOT
@@ -26,6 +29,20 @@ def is_scanned(source_file: str | None) -> bool:
     return (source_file or "").startswith(SCAN_PREFIX)
 
 
+def entered_uploads(conn: Connection, chama_id: str) -> set[int]:
+    """Uploads typed into Kibaba (no photo), by number."""
+    return {r[0] for r in conn.execute(text("SELECT id FROM app.uploads WHERE chama_id = :c AND source = 'typed'"),
+                                       {"c": chama_id})}
+
+
+def source(source_file: str | None, entered: set[int]) -> str:
+    """typed (the yearly Excel files), scanned (a photo) or entered (typed into Kibaba)."""
+    if not is_scanned(source_file):
+        return "typed"
+    found = re.search(r"scan-(\d+)", source_file or "")
+    return "entered" if found and int(found.group(1)) in entered else "scanned"
+
+
 def photo_file(chama_id: str, source_photo: str | None) -> Path | None:
     """The photo of a page, if there is one, inside the chama's photo folder only."""
     if not source_photo:
@@ -37,8 +54,10 @@ def photo_file(chama_id: str, source_photo: str | None) -> Path | None:
     return path
 
 
-def photo_refusal(chama_id: str, meeting: dict) -> str | None:
+def photo_refusal(chama_id: str, meeting: dict, entered: set[int] | None = None) -> str | None:
     """Why this page's photo may not be shown, or None if it may."""
+    if source(meeting["source_file"], entered or set()) == "entered":
+        return "This page was typed in by the treasurer, so there is no photo of it."
     scanned = is_scanned(meeting["source_file"])
     if not scanned and is_demo_chama(chama_id):
         return "No photo is kept for this page."
@@ -54,6 +73,7 @@ def _num(value) -> float | None:
 
 
 def meetings(conn: Connection, chama_id: str) -> list[dict]:
+    entered = entered_uploads(conn, chama_id)
     return [{
         "page_no": m["page_no"],
         "meeting_month": m["meeting_month"],
@@ -63,7 +83,7 @@ def meetings(conn: Connection, chama_id: str) -> list[dict]:
         "total_collection": _num(m["total_collection"]),
         "lines": m["lines"],
         "new_loans": m["new_loans"],
-        "source": "scanned" if is_scanned(m["source_file"]) else "typed",
+        "source": source(m["source_file"], entered),
         "has_issues": m["has_issues"],
     } for m in records.meetings_list(conn, chama_id)]
 
@@ -73,13 +93,14 @@ def meeting_page(conn: Connection, chama_id: str, page_no: int) -> dict | None:
     if not m:
         return None
     names = member_names(conn, chama_id)
-    refusal = photo_refusal(chama_id, m)
+    entered = entered_uploads(conn, chama_id)
+    refusal = photo_refusal(chama_id, m, entered)
     return {
         "page_no": m["page_no"],
         "meeting_month": m["meeting_month"],
         "meeting_date": m["meeting_date"],
         "date_estimated": m["date_source"] in ("estimated", "written_month"),
-        "source": "scanned" if is_scanned(m["source_file"]) else "typed",
+        "source": source(m["source_file"], entered),
         "footer": {key: _num(m[key]) for key in
                    ("contribution_total", "brought_forward", "total_collection", "cash", "banked")},
         "unclear": bool(m["unclear"]),

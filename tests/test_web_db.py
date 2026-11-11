@@ -164,19 +164,22 @@ def test_a_deactivated_account_can_be_given_another_member(engine):
     assert rows == [("M-b", True)]
 
 
-def test_the_release_adds_its_official_and_member_by_the_fictional_name(engine, monkeypatch):
+def test_the_release_adds_its_treasurer_and_member_with_their_phones(engine, monkeypatch):
     from chama.config import load_config
-    from chama.deploy import MEMBER_NAME, add_accounts
+    from chama.deploy import MEMBER_NAME, OFFICIAL_NAME, add_accounts
 
     monkeypatch.setenv("RELEASE_OFFICIAL_EMAIL", "release.official@example.com")
     monkeypatch.setenv("RELEASE_MEMBER_EMAIL", "release.member@example.com")
+    monkeypatch.setenv("RELEASE_OFFICIAL_PHONE", "0711 000 001")
+    monkeypatch.delenv("RELEASE_MEMBER_PHONE", raising=False)
     with engine.begin() as conn:
         conn.execute(text("INSERT INTO private.member_codes VALUES ('chama_demo', :n, 'M-release')"), {"n": MEMBER_NAME})
     add_accounts(load_config(), engine)
     with engine.connect() as conn:
-        rows = conn.execute(text("SELECT role, chama_id, member_code FROM app.users "
+        rows = conn.execute(text("SELECT role, chama_id, member_code, display_name, position, phone FROM app.users "
                                  "WHERE email LIKE 'release.%' ORDER BY role")).all()
-    assert rows == [("member", "chama_demo", "M-release"), ("official", "chama_demo", None)]
+    assert rows == [("member", "chama_demo", "M-release", None, None, None),
+                    ("official", "chama_demo", None, OFFICIAL_NAME, "treasurer", "+254711000001")]
 
 
 def test_the_footer_status_gives_members_no_score_details(engine):
@@ -194,3 +197,105 @@ def test_the_footer_status_gives_members_no_score_details(engine):
     assert for_official["records_to"]["page_no"] == 149
     assert for_official["model_label"] == "random forest fc6ae3fe"
     assert set(for_member) == {"records_to"}
+
+
+# ---- D-037: phones and sign-ins waiting for a code ---------------------------------------
+
+
+def test_an_account_needs_an_email_or_a_phone_and_a_phone_is_one_account(engine):
+    from chama import StepFailed
+    from chama.web.services import accounts
+
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO private.member_codes VALUES ('chama_demo', 'p', 'M-p'), "
+                          "('chama_demo', 'q', 'M-q') ON CONFLICT DO NOTHING"))
+    assert "phone +254722000001" in accounts.add_user(engine, "p@example.com", "member", "chama_demo", "M-p", None,
+                                                       None, phone="0722000001")
+    assert accounts.add_user(engine, None, "member", "chama_demo", "M-q", None, None, phone="0722000002").startswith(
+        "Added member +254722000002")
+    with pytest.raises(StepFailed, match="already the phone of another account"):
+        accounts.add_user(engine, "other@example.com", "member", "chama_demo", "M-q", None, None, phone="0722000001")
+    with pytest.raises(StepFailed, match="--email, --phone or both"):
+        accounts.add_user(engine, None, "member", "chama_demo", "M-q", None, None)
+    with pytest.raises(IntegrityError), engine.begin() as conn:
+        conn.execute(text("INSERT INTO app.users (role, chama_id) VALUES ('official', 'chama_demo')"))
+    assert "deactivated" in accounts.deactivate_user(engine, "0722000002").lower()
+
+
+def test_a_waiting_sign_in_is_used_once(engine):
+    from datetime import datetime, timedelta, timezone
+
+    from chama.web.data import users
+
+    with engine.begin() as conn:
+        user = conn.execute(text("SELECT id FROM app.users ORDER BY id LIMIT 1")).scalar_one()
+        later = datetime.now(timezone.utc) + timedelta(minutes=10)
+        users.start_step(conn, "h-old", user, "password", "sb-1", later)
+        users.start_step(conn, "h-new", user, "password", "sb-1", later)      # a new sign-in replaces the old
+        assert users.step(conn, "h-old") is None
+        assert users.count_attempt(conn, "h-new") == 1
+        users.end_step(conn, "h-new")
+        assert users.step(conn, "h-new") is None
+        users.start_step(conn, "h-gone", user, "phone", None, datetime.now(timezone.utc) - timedelta(seconds=1))
+        assert users.step(conn, "h-gone") is None                               # expired
+
+
+# ---- D-038, D-039: a typed page has no photo; a scan's photos are its parts ------------
+
+
+def test_a_typed_page_needs_no_photo_but_a_scan_does(engine):
+    from chama.web.data import scans as data
+
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO app.uploads (chama_id, uploaded_by, idempotency_key, source, status) "
+                          "VALUES ('chama_demo', 1, 'typed-1', 'typed', 'ready')"))
+    with pytest.raises(IntegrityError), engine.begin() as conn:
+        conn.execute(text("INSERT INTO app.uploads (chama_id, uploaded_by, idempotency_key) "
+                          "VALUES ('chama_demo', 1, 'no-photo')"))
+    with engine.begin() as conn:
+        upload = new_upload(conn, "parts-test", "parts-key")
+        for part in (2, 1):
+            conn.execute(text("INSERT INTO app.upload_photos VALUES (:u, :p, :path, :s)"),
+                         {"u": upload, "p": part, "path": f"part{part}.jpg", "s": f"sum{part}"})
+        found = data.upload(conn, upload, "chama_demo")
+        assert found["parts"] == 2 and data.photo_parts(conn, found) == ["part1.jpg", "part2.jpg"]
+    with pytest.raises(IntegrityError), engine.begin() as conn:
+        conn.execute(text("INSERT INTO app.upload_photos VALUES (:u, 4, 'x.jpg', 'x')"), {"u": upload})
+
+
+def test_a_typed_page_opens_with_the_last_meetings_members_and_balances(engine):
+    from datetime import date
+
+    from chama.web.services import scans as service
+
+    with engine.begin() as conn:
+        # earlier tests leave runs queued and pages accepted; this one starts after them
+        conn.execute(text("UPDATE app.pipeline_runs SET status = 'done'"))
+        conn.execute(text("UPDATE app.uploads SET meeting_date = NULL"))
+        conn.execute(text("CREATE TABLE IF NOT EXISTS analytics.statements (chama_id text, page_no int, "
+                          "line_on_page int, line_no int, member_code text, line_kind text, loan_type text, "
+                          "monthly_amount numeric, monthly_note text, loan_before numeric, repayment numeric, "
+                          "interest_rate_pct numeric, interest_amount numeric, loan_after numeric, "
+                          "closing_balance numeric, due_month date, unclear boolean, issues text)"))
+        conn.execute(text("INSERT INTO private.member_codes VALUES ('chama_demo', 'Gladys Onchiri', 'M-gladys'), "
+                          "('chama_demo', 'Anne Kiende', 'M-anne') ON CONFLICT DO NOTHING"))
+        conn.execute(text("INSERT INTO private.member_aliases (chama_id, raw_name, canonical_name) VALUES "
+                          "('chama_demo', 'gladys onchiri', 'Gladys Onchiri'), "
+                          "('chama_demo', 'anne kiende', 'Anne Kiende') ON CONFLICT DO NOTHING"))
+        conn.execute(text("INSERT INTO analytics.statements (chama_id, page_no, line_on_page, member_code, loan_type, "
+                          "loan_after, closing_balance) VALUES ('chama_demo', 149, 1, 'M-gladys', NULL, 40000, 40000), "
+                          "('chama_demo', 149, 2, 'M-anne', NULL, 0, 0)"))
+        upload, created = service.start_typed(conn, "chama_demo", 1, date(2026, 5, 3), "typed-start-1")
+        again, created_again = service.start_typed(conn, "chama_demo", 1, date(2026, 5, 3), "typed-start-1")
+        assert created and not created_again and again["id"] == upload["id"]
+        draft = service.draft_view(conn, upload["id"], "chama_demo")
+        with pytest.raises(service.ApiError, match="already in the records"):
+            service.start_typed(conn, "chama_demo", 1, date(2026, 4, 20), "typed-start-2")
+    assert draft["source"] == "typed" and draft["status"] == "ready"
+    assert draft["photo"] == {"available": False, "reason": "This page was typed in, so there is no photo of it.",
+                              "parts": 0}
+    lines = [r["cells"] for r in draft["rows"] if r["table"] == "statements"]
+    assert [(c["member_name"], c["loan_before"]) for c in lines] == [("Gladys Onchiri", "40,000"), ("Anne Kiende", None)]
+    meeting = next(r["cells"] for r in draft["rows"] if r["table"] == "meetings")
+    assert meeting["meeting_date"] == "3/5/2026"
+    assert all(n["member"] for n in draft["names"])          # the agreed names match at once

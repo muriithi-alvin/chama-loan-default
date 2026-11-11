@@ -18,7 +18,8 @@ Usage:
     python -m chama.pipeline drift             #    recent records vs the training data (Evidently)
     python -m chama.pipeline deploy-bundle     #    demo chama + model for the cloud release (checked for real names)
     python -m chama.pipeline deploy-publish    #    bundle -> private dataset; settings and build -> Hugging Face Space
-    python -m chama.pipeline demo-chama        #    chama B's pages with fictional names, for demos
+    python -m chama.pipeline serve-release     #    the release on this laptop, demo chama only, for a tunnel
+    python -m chama.pipeline demo-chama        #    chama B's pages as Humble Sister, for the web interface
     python -m chama.pipeline web-user add ...  #    accounts for the web interface (also list, deactivate)
     python -m chama.pipeline web-stats         #    page times from the web server's request log
 
@@ -386,9 +387,10 @@ def drift(chama_id: str, months: int) -> None:
 def deploy_bundle() -> None:
     """Write the cloud release's private bundle to data/deploy/bundle (D-032).
 
-    The demo chama's typed pages and names and the champion model, checked
-    for every word of every real member's name first. Upload the folder to the
-    private Hugging Face dataset named in docs/deployment.md.
+    The interface copy's typed pages and names and the champion model. A copy
+    with fictional names is checked for every word of every real member's name
+    first; Humble Sister's copy keeps its real names (D-036), so its bundle stays
+    on this laptop for serve-release and deploy-publish refuses it.
     """
     import json
 
@@ -397,9 +399,10 @@ def deploy_bundle() -> None:
     def go() -> None:
         out = build(load_config())
         m = json.loads((out / "MANIFEST.json").read_text(encoding="utf-8"))
+        checked = ("real names kept, as the chama's officials agreed (D-036); it stays on this laptop"
+                   if m.get("real_names") else f"checked against {m['checked_against_real_names']} real names")
         print(f"Bundle written to {shown_path(out)}: {len(m['files'])} files, model version "
-              f"{m['model']['version']} (checksum {m['model']['checksum'][:12]}), checked against "
-              f"{m['checked_against_real_names']} real names.")
+              f"{m['model']['version']} (checksum {m['model']['checksum'][:12]}), {checked}.")
 
     _run(go)
 
@@ -408,21 +411,39 @@ def deploy_bundle() -> None:
 @click.option("--ref", default="main", show_default=True, help="The Git branch the image is built from.")
 @click.option("--rebuild", is_flag=True, help="Rebuild the image, for example after pushing new code.")
 def deploy_publish(ref: str, rebuild: bool) -> None:
-    """Publish the release to Hugging Face from the settings in .env (D-032).
+    """Publish the release to Hugging Face from the settings in .env (D-032, D-041).
 
-    Uploads data/deploy/bundle to a private dataset, sets up the public Space
-    with its variables and secrets, and uploads the Dockerfile, which starts
-    the build. Safe to run again. Needs HF_TOKEN and the other settings listed
-    in docs/deployment.md.
+    Uploads data/deploy/bundle to a private dataset, makes a private storage
+    bucket and mounts it in the Space at /data (where the records added later
+    are kept), sets up the public Space with its variables and secrets, and
+    uploads the Dockerfile, which starts the build. Needs a PRO account. Safe
+    to run again: the bucket and what it holds are kept. Needs HF_TOKEN and the
+    other settings listed in docs/deployment.md.
     """
     from chama.deploy import publish
 
     def go() -> None:
         address = publish(ref, rebuild)
         print(f"Published. Build log: the Space's Logs tab. The site will open at {address}")
-        print(f"Ready when {address}/api/health says ready.")
+        print(f"Ready when {address}/api/health says ready, with storage 'kept in the storage bucket'.")
+        print(f"Add {address}/api/session/google/callback to Supabase's Redirect URLs for Google sign-in.")
 
     _run(go)
+
+
+@cli.command("serve-release")
+@click.option("--address", required=True, help="The tunnel's https address, shown on ngrok's Forwarding line.")
+@click.option("--fresh", is_flag=True, help="Start again from the demo chama's starting state.")
+def serve_release(address: str, fresh: bool) -> None:
+    """Run the release on this laptop for a tunnel, until Ctrl+C (D-034).
+
+    Uses its own database holding only the demo chama, so real chamas' records
+    are out of reach. --fresh drops that database and its scanned pages, for
+    example to reuse a demo page.
+    """
+    from chama.deploy import serve_on_laptop
+
+    _run(lambda: serve_on_laptop(address, fresh))
 
 
 @cli.command("first-start", hidden=True)
@@ -434,17 +455,71 @@ def first_start() -> None:
     _run(lambda: start(load_config(), get_engine()))
 
 
-@cli.command("demo-chama")
-@click.option("--from", "source_id", default="chama_b", show_default=True)
-@click.option("--to", "demo_id", default="chama_demo", show_default=True)
-def demo_chama(source_id: str, demo_id: str) -> None:
-    """Copy a chama's typed pages with fictional names, for demonstrations (D-028).
+@cli.group("release-storage", hidden=True)
+def release_storage() -> None:
+    """In the cloud release: keep its records in the storage bucket at BACKUP_DIR (D-041)."""
 
-    Writes data/raw/<to>/ and its reviewed names file. Every member gets a fixed
-    fictional name, free-text columns are emptied and no photos are copied, and
-    the copy is checked for every real name before it is saved. Then run `all`
-    and `score`: the demo chama's bands match the real chama's, and a page
-    scanned into it never touches the real records.
+
+def _bucket():
+    from chama.release_storage import base_dir
+
+    base = base_dir()
+    if base is None:
+        raise click.ClickException("BACKUP_DIR is not set.")
+    return base
+
+
+@release_storage.command("check")
+def release_storage_check() -> None:
+    """Exit 0 when the bucket's folder can be written to (waits up to 30 s for the mount)."""
+    from chama.release_storage import wait_for_mount
+
+    base = _bucket()
+    if not wait_for_mount(base):
+        raise click.ClickException(f"{base} cannot be written to: is the storage bucket attached?")
+    print(f"storage bucket ready at {base}")
+
+
+@release_storage.command("attach")
+def release_storage_attach() -> None:
+    """Link each release chama's scans, photos and names file into the bucket."""
+    from chama.release_storage import attach
+
+    for line in attach(_bucket(), load_config()):
+        print(f"kept in the bucket: {line}")
+
+
+@release_storage.command("restore")
+def release_storage_restore() -> None:
+    """Restore the newest saved database, if there is one (the database must be empty)."""
+    from chama.release_storage import restore
+
+    def go() -> None:
+        found = restore(_bucket())
+        print(f"restored the records saved in {found.name}" if found else "no saved records: starting from the bundle")
+
+    _run(go)
+
+
+@release_storage.command("save")
+def release_storage_save() -> None:
+    """Save the database to the bucket now."""
+    from chama.release_storage import save
+
+    _run(lambda: print(f"database saved: {save(_bucket()).name}"))
+
+
+@cli.command("demo-chama")
+@click.option("--from", "source_id", default=None, help="Default: the copy's copy_of in config/pipeline.yaml.")
+@click.option("--to", "demo_id", default="chama_demo", show_default=True)
+def demo_chama(source_id: str | None, demo_id: str) -> None:
+    """Copy a chama's typed pages for the web interface (D-028, D-036).
+
+    Writes data/raw/<to>/ and its reviewed names file, as the copy's settings in
+    config/pipeline.yaml say: real names (with renames) or fictional ones, and
+    pages up to records_until. Free-text columns are emptied and no photos are
+    copied. An earlier copy is moved to data/interim/replaced/. Then run `all`
+    and `score`: a page scanned into the copy never touches the real records.
     """
     from chama.web.services.demo import build_demo_chama
 
@@ -455,28 +530,30 @@ def demo_chama(source_id: str, demo_id: str) -> None:
 def web_user() -> None:
     """Accounts for the web interface: add, list, deactivate, codes (R3).
 
-    Create the person's sign-in in Supabase first (Authentication > Users >
-    Add user, with Auto Confirm); this says what the email may open.
+    Signing in is Supabase's (D-037): a password (Authentication > Users > Add
+    user, with Auto Confirm), Google with the same email, or a code texted to
+    the phone. This says what the email or phone may open.
     """
 
 
 @web_user.command("add")
-@click.option("--email", required=True)
+@click.option("--email", help="For a password or Google sign-in.")
+@click.option("--phone", help="07XXXXXXXX or +2547XXXXXXXX: for codes by text. Officials need one.")
 @click.option("--role", required=True, type=click.Choice(["official", "member", "admin"]))
 @click.option("--chama", "chama_id", required=True)
 @click.option("--member", "member_code", help="Member accounts: the member code whose records they see.")
-@click.option("--name", help="Officials: the name shown on the pages (fictional for a demo account).")
+@click.option("--name", help="Officials: the name shown on the pages.")
 @click.option("--position", type=click.Choice(["chair", "treasurer", "secretary"]))
-def web_user_add(email: str, role: str, chama_id: str, member_code: str | None, name: str | None,
-                 position: str | None) -> None:
-    """Give an email access to a chama's pages."""
+def web_user_add(email: str | None, phone: str | None, role: str, chama_id: str, member_code: str | None,
+                 name: str | None, position: str | None) -> None:
+    """Give an email or phone access to a chama's pages."""
     from chama.db import create_schemas
     from chama.web.services.accounts import add_user
 
     def go() -> None:
         engine = get_engine()
         create_schemas(engine)
-        print(add_user(engine, email, role, chama_id, member_code, name, position))
+        print(add_user(engine, email, role, chama_id, member_code, name, position, phone=phone))
 
     _run(go)
 
@@ -490,7 +567,7 @@ def web_user_list() -> None:
 
 
 @web_user.command("deactivate")
-@click.option("--email", required=True)
+@click.option("--email", required=True, help="The account's email, or its phone for a phone-only account.")
 def web_user_deactivate(email: str) -> None:
     """Stop an account signing in and end its sessions."""
     from chama.web.services.accounts import deactivate_user

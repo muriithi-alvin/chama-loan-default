@@ -196,3 +196,58 @@ CREATE TABLE IF NOT EXISTS app.worker_status (
     model_loaded_at TIMESTAMPTZ,
     last_seen_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- D-037: sign-in with Google or with a code texted to a phone, and officials
+-- confirm every sign-in with a code texted to their phone. A phone sign-in is a
+-- Supabase user of its own, so its id is kept beside the email one.
+ALTER TABLE app.users ADD COLUMN IF NOT EXISTS phone TEXT;                    -- +2547..., where codes are texted
+ALTER TABLE app.users ADD COLUMN IF NOT EXISTS phone_identity_id TEXT UNIQUE; -- Supabase user id of the phone sign-in
+ALTER TABLE app.users ALTER COLUMN email DROP NOT NULL;                       -- a member may have a phone only
+CREATE UNIQUE INDEX IF NOT EXISTS users_phone ON app.users (phone);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_can_sign_in') THEN
+        ALTER TABLE app.users ADD CONSTRAINT users_can_sign_in CHECK (email IS NOT NULL OR phone IS NOT NULL);
+    END IF;
+END
+$$;
+
+-- A sign-in waiting for its texted code: a member signing in by phone, or an
+-- official after the first step. The chama_signin cookie holds a random token;
+-- only its SHA-256 is kept. It lasts 10 minutes and allows 5 tries.
+CREATE TABLE IF NOT EXISTS app.signin_steps (
+    token_hash  TEXT        PRIMARY KEY,
+    user_id     BIGINT      NOT NULL REFERENCES app.users (id),
+    method      TEXT        NOT NULL CHECK (method IN ('password', 'google', 'phone')),
+    identity_id TEXT,                             -- the first step's Supabase user, linked once the code is right
+    attempts    INTEGER     NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at  TIMESTAMPTZ NOT NULL,
+    used_at     TIMESTAMPTZ
+);
+
+-- D-038: a page typed in by the treasurer has no photo; D-039: a meeting may be
+-- photographed in up to 3 parts, read together into one draft. uploads.photo_path
+-- and checksum are the first part's (or, for several parts, a SHA-256 of theirs).
+ALTER TABLE app.uploads ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'photo';
+ALTER TABLE app.uploads ALTER COLUMN photo_path DROP NOT NULL;
+ALTER TABLE app.uploads ALTER COLUMN checksum DROP NOT NULL;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uploads_source') THEN
+        ALTER TABLE app.uploads ADD CONSTRAINT uploads_source CHECK (source IN ('photo', 'typed'));
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'photo_uploads_have_a_photo') THEN
+        ALTER TABLE app.uploads ADD CONSTRAINT photo_uploads_have_a_photo
+            CHECK (source = 'typed' OR (photo_path IS NOT NULL AND checksum IS NOT NULL));
+    END IF;
+END
+$$;
+
+CREATE TABLE IF NOT EXISTS app.upload_photos (
+    upload_id  BIGINT  NOT NULL REFERENCES app.uploads (id),
+    part       INTEGER NOT NULL CHECK (part BETWEEN 1 AND 3),
+    photo_path TEXT    NOT NULL,
+    checksum   TEXT    NOT NULL,                  -- SHA-256 of this photo as sent
+    PRIMARY KEY (upload_id, part)
+);

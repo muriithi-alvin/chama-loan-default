@@ -24,6 +24,7 @@ Results go into Chapter 5 of the report.
 
 - [ ] The site opens at its https address on the participant's phone
 - [ ] Signed out, so the session starts at the landing page
+- [ ] On a first visit, ngrok shows a warning page: tap **Visit Site**. It is ngrok's, not Kibaba's
 - [ ] The demo official and member passwords to hand
 - [ ] For the scan task: the handwritten demo page (fictional names), dated
       after the demo chama's last accepted page
@@ -49,7 +50,7 @@ participant is stuck for two minutes or asks; if you help, mark the task
 | O1 | "Open the website and sign in with this email and password." | Reaches the Overview |
 | O2 | "After the last meeting, who should you talk to first, and why?" | Names a member marked "Follow up now" and gives one of the reasons shown |
 | O3 | "What does the yellow colour, 'Keep an eye on', mean?" | Explains it in their own words (could miss a repayment soon; check in) |
-| O4 | "How much does Muthoni Ndegwa still have to repay?" | Finds KSh 460,000 on her page |
+| O4 | "How much does Alvin Wise still have to repay?" | Finds the balance on his page: KSh 40,000 on page 128 (July 2024), before any test pages are added |
 | O5 | "This is the page from this month's meeting. Add it to Kibaba." | Photographs the page, corrects the flagged line and the misspelt name, and accepts |
 | O6 | "Find what was recorded at the meeting of 5 April 2026." | Opens that meeting's page in Records |
 
