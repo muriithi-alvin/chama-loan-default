@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { FlowSteps } from "@/components/flow-steps";
 import { Card } from "@/components/page-header";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { api, ApiProblem } from "@/lib/client-api";
@@ -65,8 +66,10 @@ export function Review({ initial }: { initial: Draft }) {
   const [confirm, setConfirm] = useState<"accept" | "discard" | null>(null);
   const [busy, setBusy] = useState(false);
   const [card, setCard] = useState(0);
+  const [part, setPart] = useState(1);
   const dialog = useRef<HTMLDialogElement>(null);
   const editable = draft.status === "ready";
+  const typed = draft.source === "typed";      // typed in: no photo, the ledger takes the whole width (D-038)
 
   useEffect(() => {
     if (confirm) dialog.current?.showModal();
@@ -131,17 +134,41 @@ export function Review({ initial }: { initial: Draft }) {
 
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-      <div className="xl:col-span-5">
-        <div className="flex flex-col gap-3 xl:sticky xl:top-6">
-          {draft.photo.available ? (
-            <PhotoViewer src={`/api/uploads/${draft.upload_id}/photo`} alt="The scanned ledger page" className="h-[380px] xl:h-[calc(100dvh-140px)]" />
-          ) : (
-            <Card tone="cream"><p className="text-[16px]">{draft.photo.reason}</p></Card>
-          )}
+      <div className="xl:col-span-12"><FlowSteps at="check" typed={typed} /></div>
+      {!typed && (
+        <div className="xl:col-span-5">
+          <div className="flex flex-col gap-3 xl:sticky xl:top-6">
+            {draft.photo.available && draft.photo.parts > 1 && (
+              <div role="tablist" aria-label="Photos of this meeting" className="flex flex-wrap gap-2">
+                {Array.from({ length: draft.photo.parts }, (_, i) => i + 1).map((n) => (
+                  <button key={n} type="button" role="tab" aria-selected={part === n} onClick={() => setPart(n)}
+                    className={`min-h-11 rounded-full px-4 text-[15px] font-bold ${part === n ? "bg-ink text-white" : "border-[1.5px] border-ink bg-white hover:bg-ice"}`}>
+                    Part {n} of {draft.photo.parts}
+                  </button>
+                ))}
+              </div>
+            )}
+            {draft.photo.available ? (
+              <PhotoViewer key={part} src={`/api/uploads/${draft.upload_id}/photo?part=${part}`}
+                alt={draft.photo.parts > 1 ? `Part ${part} of the scanned ledger page` : "The scanned ledger page"}
+                className={draft.photo.parts > 1 ? "h-[380px] xl:h-[calc(100dvh-200px)]" : "h-[380px] xl:h-[calc(100dvh-140px)]"} />
+            ) : (
+              <Card tone="cream"><p className="text-[16px]">{draft.photo.reason}</p></Card>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="flex flex-col gap-6 xl:col-span-7">
+      <div className={`flex flex-col gap-6 ${typed ? "xl:col-span-12" : "xl:col-span-7"}`}>
+        {typed && (
+          <Card tone="cream" className="flex flex-col gap-1.5">
+            <p className="text-[17px] font-bold">Each member is on a line, with the balance they carried from the last meeting.</p>
+            <p className="text-[16px] text-subtle">
+              Type what each one paid: Monthly, Repaid, Interest and the Balance after. Leave a cell empty if nothing was paid.
+              A loan given today goes under &ldquo;Loans given at this meeting&rdquo;. Everything is saved as you go.
+            </p>
+          </Card>
+        )}
         <div aria-live="polite" className="flex flex-wrap items-center gap-3 text-[15px]">
           <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 font-bold ${checks ? "bg-high-bg text-high" : "bg-low-bg text-low"}`}>
             {checks ? <AlertTriangle aria-hidden="true" size={15} /> : <Check aria-hidden="true" size={15} />}
@@ -162,7 +189,7 @@ export function Review({ initial }: { initial: Draft }) {
 
         {meeting && (
           <Card aria-labelledby="rv-meeting" className="flex flex-col gap-4">
-            <h2 id="rv-meeting" className="text-[22px]">The page: date and totals</h2>
+            <h2 id="rv-meeting" className="text-[22px]">{typed ? "The meeting: date and totals" : "The page: date and totals"}</h2>
             <fieldset disabled={!editable} className="grid grid-cols-2 gap-3 md:grid-cols-3">
               {columns.meetings.filter((c) => !["host", "notes", "column_headers"].includes(c.key)).map((c) => (
                 <Cell key={c.key} row={meeting} column={c.key} label={c.label} onSave={saveCell} />
@@ -353,8 +380,9 @@ export function Review({ initial }: { initial: Draft }) {
           <h2 id="rv-confirm" className="text-[26px]">{confirm === "accept" ? "Accept this page?" : "Discard this scan?"}</h2>
           <p className="text-[17px] text-subtle">
             {confirm === "accept"
-              ? `The ${lines.length} lines become the next ledger page in the records, and Kibaba updates the records and works out who to follow up. After this, the page can only change through a new scan.`
-              : "The rows read from this photo are set aside and nothing is added to the records. The edit record keeps what was changed."}
+              ? `The ${lines.length} lines become the next ledger page in the records, and Kibaba updates the records and works out who to follow up. You will see the results next. After this, the page can only change through a new page.`
+              : typed ? "This typed page is set aside and nothing is added to the records. The edit record keeps what was typed."
+                : "The rows read from this photo are set aside and nothing is added to the records. The edit record keeps what was changed."}
           </p>
           <div className="flex flex-wrap gap-3">
             <button type="button" disabled={busy} onClick={() => confirm && finish(confirm)}

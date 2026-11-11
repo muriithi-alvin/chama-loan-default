@@ -20,7 +20,8 @@ def _row(conn: Connection, sql: str, **params) -> dict | None:
 
 UPLOAD_COLUMNS = """u.id, u.chama_id, u.uploaded_by, u.photo_path, u.checksum, u.idempotency_key, u.status,
     u.problem, u.provider, u.model, u.seconds, u.page_no, u.meeting_date, u.accepted_by, u.accepted_at,
-    u.created_at"""
+    u.created_at, u.source,
+    (SELECT count(*) FROM app.upload_photos p WHERE p.upload_id = u.id) AS parts"""
 
 
 def upload(conn: Connection, upload_id: int, chama_id: str, lock: bool = False) -> dict | None:
@@ -42,12 +43,31 @@ def upload_by_checksum(conn: Connection, chama_id: str, checksum: str) -> dict |
                 c=chama_id, s=checksum)
 
 
-def add_upload(conn: Connection, chama_id: str, user_id: int, photo_path: str, checksum: str,
-               key: str, provider: str) -> int:
+def add_upload(conn: Connection, chama_id: str, user_id: int, photo_path: str | None, checksum: str | None,
+               key: str, provider: str | None, source: str = "photo", status: str = "queued") -> int:
     return conn.execute(text(
-        "INSERT INTO app.uploads (chama_id, uploaded_by, photo_path, checksum, idempotency_key, provider) "
-        "VALUES (:c, :u, :p, :s, :k, :v) RETURNING id"),
-        {"c": chama_id, "u": user_id, "p": photo_path, "s": checksum, "k": key, "v": provider}).scalar_one()
+        "INSERT INTO app.uploads (chama_id, uploaded_by, photo_path, checksum, idempotency_key, provider, source, "
+        "status) VALUES (:c, :u, :p, :s, :k, :v, :o, :t) RETURNING id"),
+        {"c": chama_id, "u": user_id, "p": photo_path, "s": checksum, "k": key, "v": provider, "o": source,
+         "t": status}).scalar_one()
+
+
+def add_photo_part(conn: Connection, upload_id: int, part: int, photo_path: str, checksum: str) -> None:
+    conn.execute(text("INSERT INTO app.upload_photos (upload_id, part, photo_path, checksum) VALUES (:u, :n, :p, :s)"),
+                 {"u": upload_id, "n": part, "p": photo_path, "s": checksum})
+
+
+def photo_parts(conn: Connection, upload: dict) -> list[str]:
+    """The upload's photos in order: its parts (D-039), or the one photo of an older upload."""
+    paths = [r[0] for r in conn.execute(text(
+        "SELECT photo_path FROM app.upload_photos WHERE upload_id = :u ORDER BY part"), {"u": upload["id"]})]
+    return paths or ([upload["photo_path"]] if upload.get("photo_path") else [])
+
+
+def source_of_scan(conn: Connection, chama_id: str, upload_id: int) -> str | None:
+    """photo or typed, for an accepted page's scan file."""
+    return conn.execute(text("SELECT source FROM app.uploads WHERE id = :i AND chama_id = :c"),
+                        {"i": upload_id, "c": chama_id}).scalar()
 
 
 def set_upload(conn: Connection, upload_id: int, **values) -> None:
@@ -82,6 +102,19 @@ def last_meeting_month(conn: Connection, chama_id: str):
     return conn.execute(text(
         "SELECT max(coalesce(meeting_date, meeting_month)) FROM analytics.meetings WHERE chama_id = :c"),
         {"c": chama_id}).scalar()
+
+
+def last_accepted_meeting(conn: Connection, chama_id: str, other_than: int | None = None):
+    """The latest meeting date of an accepted page, whether or not its run has finished."""
+    return conn.execute(text(
+        "SELECT max(meeting_date) FROM app.uploads WHERE chama_id = :c AND status = 'accepted' "
+        "AND id <> coalesce(CAST(:u AS bigint), 0)"), {"c": chama_id, "u": other_than}).scalar()
+
+
+def runs_waiting(conn: Connection, chama_id: str) -> int:
+    """Accepted pages whose records update has not finished yet."""
+    return conn.execute(text("SELECT count(*) FROM app.pipeline_runs WHERE chama_id = :c "
+                             "AND status IN ('queued', 'running')"), {"c": chama_id}).scalar_one()
 
 
 # ---- Jobs ------------------------------------------------------------------------
@@ -139,6 +172,14 @@ def release_stuck_jobs(conn: Connection, minutes: int = 30) -> int:
     return conn.execute(text(
         "UPDATE app.jobs SET status = 'queued', run_after = now() WHERE status = 'running' "
         "AND locked_at < now() - make_interval(mins => :m)"), {"m": minutes}).rowcount
+
+
+def scores_on_page(conn: Connection, chama_id: str, page_no: int) -> list[dict]:
+    """The newest band and reasons of each member scored at this meeting."""
+    return [dict(r._mapping) for r in conn.execute(text("""
+        SELECT DISTINCT ON (member_code) member_code, band, reasons FROM app.risk_scores
+        WHERE chama_id = :c AND page_no = :p ORDER BY member_code, scored_at DESC
+    """), {"c": chama_id, "p": page_no})]
 
 
 def members_on_page(conn: Connection, chama_id: str, page_no: int) -> list[str]:
@@ -241,6 +282,12 @@ def set_name(conn: Connection, upload_id: int, raw: str, canonical: str | None, 
         "UPDATE private.name_matches SET canonical_name = :c, is_new = :n "
         "WHERE upload_id = :u AND raw_name = :r"),
         {"c": canonical, "n": is_new, "u": upload_id, "r": raw}).rowcount == 1
+
+
+def canonical_names(conn: Connection, chama_id: str) -> dict[str, str]:
+    """{member code: agreed name}, as the records know them (never demo mode's)."""
+    return {r.member_code: r.canonical_name for r in conn.execute(text(
+        "SELECT member_code, canonical_name FROM private.member_codes WHERE chama_id = :c"), {"c": chama_id})}
 
 
 def chama_aliases(conn: Connection, chama_id: str) -> dict[str, str]:

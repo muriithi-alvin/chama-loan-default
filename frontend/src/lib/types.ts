@@ -15,6 +15,20 @@ export interface Me {
   };
 }
 
+/** Before sign-in: which ways to sign in are switched on (D-037). */
+export interface Site {
+  demo_mode: boolean;
+  sign_in_ready: boolean;
+  methods: { password: boolean; google: boolean; phone: boolean };
+  officials_confirm_by_phone: boolean;
+}
+
+/** A sign-in waiting for its texted code. */
+export interface CodeStep {
+  next: "code";
+  phone_hint: string;
+}
+
 export interface ApiErrorBody {
   error: { code: string; message: string; ref: string; field?: string };
 }
@@ -105,7 +119,7 @@ export interface MeetingRow {
   total_collection: number | null;
   lines: number;
   new_loans: number;
-  source: "typed" | "scanned";
+  source: PageSource;
   has_issues: boolean;
 }
 
@@ -114,7 +128,7 @@ export interface MeetingPage {
   meeting_month: string;
   meeting_date: string | null;
   date_estimated: boolean;
-  source: "typed" | "scanned";
+  source: PageSource;
   footer: Record<"contribution_total" | "brought_forward" | "total_collection" | "cash" | "banked", number | null>;
   unclear: boolean;
   issues: string | null;
@@ -140,6 +154,9 @@ export interface MeetingPage {
   next: number | null;
 }
 
+/** typed: from the yearly Excel files; scanned: a photo; entered: typed into Kibaba (D-038). */
+export type PageSource = "typed" | "scanned" | "entered";
+
 export type UploadStatus = "queued" | "reading" | "ready" | "failed" | "accepted" | "discarded";
 
 export interface Upload {
@@ -151,6 +168,9 @@ export interface Upload {
   seconds: number | null;
   page_no: number | null;
   meeting_date: string | null;
+  source: "photo" | "typed";
+  parts: number;
+  step?: string | null;
   created_at: string;
   accepted_at: string | null;
   attempts: number;
@@ -182,7 +202,8 @@ export interface DraftRow {
 export interface Draft {
   upload_id: number;
   status: UploadStatus;
-  photo: { available: boolean; reason: string | null };
+  source: "photo" | "typed";
+  photo: { available: boolean; reason: string | null; parts: number };
   columns: Record<DraftTable, { key: string; label: string }[]>;
   rows: DraftRow[];
   names: { raw: string; member: string | null; is_new: boolean; known_spelling: boolean; suggestions: { name: string; score: number }[] }[];
@@ -200,7 +221,17 @@ export interface Run {
   started_at: string | null;
   finished_at: string | null;
   steps: { step: string; position: number; status: "waiting" | "running" | "done" | "failed"; started_at: string | null; finished_at: string | null; error_message: string | null }[];
-  changed_members: { code: string; name: string }[];
+  source: "photo" | "typed";
+  changed_members: { code: string; name: string; band: Band | null; reason: string | null }[];
+}
+
+/** For the Type-a-page form (D-038). */
+export interface TypedInfo {
+  last_meeting: Meeting | null;
+  last_accepted: string | null;
+  members: string[];
+  loans_carried: number;
+  waiting: number;
 }
 
 export interface Edit {

@@ -51,7 +51,9 @@ def photo_name(chama_id: str, page_no: int) -> str:
 
 
 def write_scan(conn, upload: dict) -> Path:
-    """The accepted rows as a raw Excel file in the typed layout."""
+    """The accepted rows as a raw Excel file in the typed layout. The page's photo
+    becomes <chama>_pNNN.jpg, a second or third part <chama>_pNNN_2.jpg and _3.jpg
+    (D-039). A typed page has no photo, but keeps the name for its page number (D-038)."""
     rows = scans.draft_rows(conn, upload["id"])
     source_photo = photo_name(upload["chama_id"], upload["page_no"])
     path = scan_file(upload["chama_id"], upload["id"])
@@ -62,9 +64,13 @@ def write_scan(conn, upload: dict) -> Path:
             records = [{**r["cells"], "source_photo": source_photo} for r in rows if r["tbl"] == table]
             pd.DataFrame(records, columns=expected_columns(table)).to_excel(
                 writer, sheet_name=sheets[table], index=False)
-    photos = PROJECT_ROOT / chamas()[upload["chama_id"]]["photos_dir"]
-    photos.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(upload["photo_path"], photos / source_photo)
+    parts = scans.photo_parts(conn, upload) if upload.get("source", "photo") == "photo" else []
+    if parts:
+        photos = PROJECT_ROOT / chamas()[upload["chama_id"]]["photos_dir"]
+        photos.mkdir(parents=True, exist_ok=True)
+        for n, part in enumerate(parts, start=1):
+            name = source_photo if n == 1 else source_photo.replace(".jpg", f"_{n}.jpg")
+            shutil.copyfile(part, photos / name)
     return path
 
 

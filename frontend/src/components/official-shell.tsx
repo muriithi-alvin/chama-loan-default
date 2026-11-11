@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  BookOpen, Camera, ClipboardList, History, Info, LayoutGrid, MoreHorizontal, PenLine, Users, X, type LucideIcon,
+  BookOpen, Camera, ClipboardList, History, Info, Keyboard, LayoutGrid, MoreHorizontal, PenLine, Users, X, type LucideIcon,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
@@ -16,11 +16,12 @@ import { SignOutButton } from "./sign-out";
 
 type Page = { href: string; label: string; icon: LucideIcon; exact?: boolean };
 
-// The four pages officials use every month, then the quieter ones.
+// The pages officials use every month, then the quieter ones.
 const MAIN: Page[] = [
   { href: "/o", label: "Overview", icon: LayoutGrid, exact: true },
   { href: "/o/members", label: "Members", icon: Users },
   { href: "/o/scan", label: "Scan a page", icon: Camera },
+  { href: "/o/type", label: "Type a page", icon: Keyboard },
   { href: "/o/records/meetings", label: "Records", icon: BookOpen },
 ];
 const MORE: Page[] = [
@@ -33,6 +34,7 @@ const PAGES = [...MAIN, ...MORE];
 function isActive(path: string, href: string, exact?: boolean) {
   if (exact) return path === href;
   if (href === "/o/scan") return path.startsWith("/o/scan") || path.startsWith("/o/runs");
+  if (href === "/o/type") return path.startsWith("/o/type");
   return path === href || path.startsWith(`${href}/`);
 }
 

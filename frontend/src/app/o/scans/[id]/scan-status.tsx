@@ -2,25 +2,31 @@
 
 import { ArrowRight, Camera, RotateCw } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 
 import { BeadThread } from "@/components/bead-thread";
+import { FlowSteps } from "@/components/flow-steps";
 import { Card } from "@/components/page-header";
 import { ServiceError } from "@/components/service-error";
 import { api, ApiProblem, fetcher } from "@/lib/client-api";
 import type { Upload } from "@/lib/types";
 
 const WORKING = new Set(["queued", "reading"]);
+const FORWARD_MS = 1200;   // long enough to see "Ready", short enough not to wait
 
-// Updates itself every 2 s and stops when the reading has ended (OFF-9, X8).
+// Updates itself every 2 s (OFF-9, X8). Once the page is read it opens the
+// review by itself, and an accepted page opens its records update (D-040).
 export function ScanStatus({ id }: { id: number }) {
+  const router = useRouter();
   const { data, error, mutate } = useSWR<Upload>(`/api/uploads/${id}`, fetcher, {
     refreshInterval: (latest) => (!latest || WORKING.has(latest.status) ? 2000 : 0),
   });
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const forwarded = useRef(false);
 
   useEffect(() => {
     if (!data || !WORKING.has(data.status)) return;
@@ -30,6 +36,15 @@ export function ScanStatus({ id }: { id: number }) {
     const t = window.setInterval(tick, 1000);
     return () => window.clearInterval(t);
   }, [data]);
+
+  const next = data?.status === "ready" ? `/o/scans/${id}/review`
+    : data?.status === "accepted" && data.run_id ? `/o/runs/${data.run_id}` : null;
+  useEffect(() => {
+    if (!next || forwarded.current) return;
+    forwarded.current = true;
+    const t = window.setTimeout(() => router.replace(next), FORWARD_MS);
+    return () => window.clearTimeout(t);
+  }, [next, router]);
 
   if (error && !data) {
     return <ServiceError message={error instanceof ApiProblem ? error.message : "The scan could not be loaded."}
@@ -42,6 +57,7 @@ export function ScanStatus({ id }: { id: number }) {
     setRetryError(null);
     try {
       await api(`/api/uploads/${id}/retry`, { method: "POST" });
+      forwarded.current = false;
       await mutate();
     } catch (e) {
       setRetryError(e instanceof ApiProblem ? e.message : "Could not try again. Reload the page.");
@@ -51,20 +67,24 @@ export function ScanStatus({ id }: { id: number }) {
   }
 
   const state = WORKING.has(data.status) ? "working" : data.status === "failed" ? "failed" : "done";
+  const several = data.parts > 1;
+  const reading = data.step?.startsWith("reading photo") ? `Reading ${data.step.slice("reading ".length)}` : "Reading the page";
   const label = {
-    queued: "Waiting for its turn", reading: "Reading the page", ready: "Ready for review", failed: "Could not read the page",
-    accepted: "Accepted", discarded: "Discarded",
+    queued: "Waiting for its turn", reading, ready: "Ready: opening the rows to check", failed: "Could not read the page",
+    accepted: "Accepted: opening the records update", discarded: "Discarded",
   }[data.status];
 
   return (
     <div className="flex flex-col gap-6">
+      <FlowSteps at={data.status === "accepted" ? "update" : data.status === "ready" ? "check" : "read"}
+        typed={data.source === "typed"} failed={data.status === "failed"} />
       <Card className="flex flex-col gap-6">
         <div aria-live="polite" className="flex flex-col gap-1.5">
           <p className="font-display text-[30px] font-extrabold leading-tight">{label}</p>
           <p className="text-[16px] text-muted">
             {WORKING.has(data.status)
-              ? `Started ${elapsed} s ago. A page usually takes under a minute.`
-              : data.seconds ? `Read in ${data.seconds.toFixed(0)} seconds.` : null}
+              ? `Started ${elapsed} s ago. ${several ? `${data.parts} photos are read one after another, about a minute each.` : "A page usually takes under a minute."}`
+              : data.seconds ? `Read in ${data.seconds.toFixed(0)} seconds${several ? `, ${data.parts} photos` : ""}.` : null}
           </p>
         </div>
         <BeadThread state={state} steps={["Queued", "Reading", state === "failed" ? "Failed" : "Ready for review"]} />
@@ -76,9 +96,9 @@ export function ScanStatus({ id }: { id: number }) {
       </Card>
 
       <div className="flex flex-wrap gap-3">
-        {data.status === "ready" && (
-          <Link href={`/o/scans/${id}/review`} className="inline-flex min-h-14 items-center gap-2 rounded-button bg-cobalt px-6 text-[18px] font-bold text-white no-underline hover:bg-cobalt-dark hover:text-white">
-            Check the rows <ArrowRight aria-hidden="true" size={20} />
+        {next && (
+          <Link href={next} replace className="inline-flex min-h-14 items-center gap-2 rounded-button bg-cobalt px-6 text-[18px] font-bold text-white no-underline hover:bg-cobalt-dark hover:text-white">
+            {data.status === "ready" ? "Check the rows" : "See the records being updated"} <ArrowRight aria-hidden="true" size={20} />
           </Link>
         )}
         {data.status === "failed" && (
@@ -88,19 +108,14 @@ export function ScanStatus({ id }: { id: number }) {
               <RotateCw aria-hidden="true" size={20} /> {retrying ? "Trying again" : "Try again"}
             </button>
             <Link href="/o/scan" className="inline-flex min-h-14 items-center gap-2 rounded-button border-2 border-ink px-6 text-[18px] font-bold text-ink no-underline hover:bg-ice hover:text-ink">
-              <Camera aria-hidden="true" size={20} /> Take a new photo
+              <Camera aria-hidden="true" size={20} /> Take new photos
             </Link>
           </>
-        )}
-        {data.status === "accepted" && data.run_id && (
-          <Link href={`/o/runs/${data.run_id}`} className="inline-flex min-h-14 items-center gap-2 rounded-button bg-cobalt px-6 text-[18px] font-bold text-white no-underline hover:bg-cobalt-dark hover:text-white">
-            See the records being updated <ArrowRight aria-hidden="true" size={20} />
-          </Link>
         )}
         {data.status === "discarded" && (
           <button type="button" onClick={retry} disabled={retrying}
             className="inline-flex min-h-14 items-center gap-2 rounded-button border-2 border-ink px-6 text-[18px] font-bold text-ink hover:bg-ice">
-            Read this photo again
+            {data.source === "typed" ? "Open this page again" : "Read these photos again"}
           </button>
         )}
       </div>

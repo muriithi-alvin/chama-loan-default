@@ -1,4 +1,4 @@
-import { Camera, ChevronRight, FileSpreadsheet } from "lucide-react";
+import { Camera, ChevronRight, FileSpreadsheet, Keyboard } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -19,6 +19,13 @@ function When({ m }: { m: MeetingRow }) {
 }
 
 function Source({ source }: { source: MeetingRow["source"] }) {
+  if (source === "entered") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-low-bg px-2.5 py-0.5 text-[14px] font-bold text-low">
+        <Keyboard aria-hidden="true" size={14} /> Entered here
+      </span>
+    );
+  }
   return source === "scanned" ? (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-ice px-2.5 py-0.5 text-[14px] font-bold text-cobalt">
       <Camera aria-hidden="true" size={14} /> Scanned
@@ -32,11 +39,11 @@ function Source({ source }: { source: MeetingRow["source"] }) {
 
 export default async function MeetingsPage() {
   const { meetings } = await apiGet<{ meetings: MeetingRow[] }>("/api/meetings");
-  const scanned = meetings.filter((m) => m.source === "scanned").length;
+  const scanned = meetings.filter((m) => m.source !== "typed").length;
 
   return (
     <PageBody>
-      <PageHeader title="Records" sub={`${meetings.length} meetings, one ledger page each. ${scanned} scanned here, the rest typed from the ledger.`}
+      <PageHeader title="Records" sub={`${meetings.length} meetings, one ledger page each. ${scanned} scanned or typed in here, the rest typed from the ledger.`}
         action={
           <Link href="/o/scan" className="inline-flex min-h-12 items-center gap-2 rounded-button bg-cobalt px-5 text-[16px] font-bold text-white no-underline hover:bg-cobalt-dark hover:text-white">
             <Camera aria-hidden="true" size={18} /> Scan the next page
