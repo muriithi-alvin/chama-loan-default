@@ -24,7 +24,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from chama.web import auth, errors
-from chama.web.routes import health, members, officials, records, scans, session
+from chama.web.routes import health, hooks, members, officials, records, scans, session
 from chama.web.settings import web_settings
 
 log = logging.getLogger("chama.web")
@@ -101,6 +101,7 @@ def create_app() -> FastAPI:
     app.include_router(records.router)
     app.include_router(scans.router)
     app.include_router(members.router)
+    app.include_router(hooks.router)        # Supabase's Send SMS hook (D-042)
     return app
 
 
