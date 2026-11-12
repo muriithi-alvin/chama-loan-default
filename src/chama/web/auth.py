@@ -143,9 +143,10 @@ class SupabaseAuth:
         return self._identity(response, email)
 
     def providers(self) -> dict[str, bool]:
-        """Which of Google and phone codes are switched on in Supabase (cached 5 minutes)."""
+        """Which of passwords (email), Google and phone codes are switched on in Supabase
+        (cached 5 minutes)."""
         if not self.settings.supabase_ready:
-            return {"google": False, "phone": False}
+            return {"email": False, "google": False, "phone": False}
         cached = _PROVIDERS.get(self.settings.supabase_url)
         if cached and cached[0] > time.monotonic():
             return cached[1]
@@ -154,7 +155,9 @@ class SupabaseAuth:
             external = response.json().get("external", {}) if response.status_code == 200 else {}
         except (ApiError, ValueError):
             external = {}
-        found = {"google": bool(external.get("google")), "phone": bool(external.get("phone"))}
+        # email: unknown counts as on, so a slow Supabase never hides the password form
+        found = {"email": bool(external.get("email", True)), "google": bool(external.get("google")),
+                 "phone": bool(external.get("phone"))}
         _PROVIDERS[self.settings.supabase_url] = (time.monotonic() + (300 if external else 30), found)
         return found
 

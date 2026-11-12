@@ -100,8 +100,10 @@ def me(conn: Connection, user: User) -> dict:
 def site(supabase: auth.Supabase) -> dict:
     """What the sign-in page needs before anyone signs in."""
     settings = web_settings()
+    providers = supabase.providers()
     return {"demo_mode": settings.demo_mode, "sign_in_ready": settings.supabase_ready,
-            "methods": {"password": settings.supabase_ready, **supabase.providers()},
+            "methods": {"password": settings.supabase_ready and providers.get("email", True),
+                        "google": providers.get("google", False), "phone": providers.get("phone", False)},
             "officials_confirm_by_phone": settings.two_step_for_officials}
 
 
