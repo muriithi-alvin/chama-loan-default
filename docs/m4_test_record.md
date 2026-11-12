@@ -1,13 +1,20 @@
-# Milestone 4 test record (T1 to T10)
+# Milestone 4 test record (T1 to T16)
 
-The ten scenarios from section 10 of `docs/m4_master_prompt.md`. Each has the
-automated tests that cover it and a short manual check on the running site.
-Manual checks use the demo chama (chama B's records with fictional names,
-D-028) on the project laptop: PostgreSQL in Docker, the API, the worker and
-the built pages (`npm run build; npm start`).
+T1 to T10 are the scenarios from section 10 of `docs/m4_master_prompt.md`; T11 to
+T16 cover what was added after the presentation (D-036 to D-043). Each has the
+automated tests that cover it and a short manual check on the running site. Manual
+checks run on the laptop release (`serve-release --address https://preview.localhost`,
+then http://localhost:3000), which holds Humble Sister's copy to page 128 (D-036).
+Until 5 Nov they used the fictional demo chama (D-028).
 
-Automated tests run with `python -m pytest` and on every push (GitHub
-Actions). On 27 Oct 2026 all of them passed.
+Automated tests run with `python -m pytest` and on every push (GitHub Actions). On
+12 Nov 2026: 337 tests, all passing, 1 skipped on Windows (symbolic links; it runs on
+GitHub's Linux).
+
+**12 Nov 2026:** the browser checks could not be run on the project laptop: with the
+site, a browser and the tools open it ran out of memory ("insufficient system
+resources"). They are written below as steps; run them with only the release and one
+browser open.
 
 **Result:** Pass = expected behaviour seen; Partly = met with a stated
 difference; To do = manual check still to run.
@@ -24,6 +31,12 @@ difference; To do = manual check still to run.
 | T8 | Extraction service down | yes | happened for real, 24 and 27 Oct | Pass |
 | T9 | Double click on Accept | yes | done 24 Oct | Pass |
 | T10 | A scan has a new name | yes | done 24 Oct | Pass |
+| T11 | Sign in with Google, a password or a phone; officials type a texted code | yes (43) | to do | Pass (automated) |
+| T12 | Humble Sister's copy: real names, two renamed, records to page 128 | yes | built and loaded 6 and 11 Nov | Pass |
+| T13 | Type a page | yes | run to done on 6 Nov (page 129, chama B's real figures) | Pass |
+| T14 | A meeting in two or three photos | yes | to do (needs Groq's paid plan, D-043) | Pass (automated) |
+| T15 | Each step opens the next, through to the results | — (pages) | to do | To do |
+| T16 | A real texted code through Africa's Talking | yes (14, fake service) | to do (needs an account with credit and a public address) | Pass (automated) |
 
 ## T1 An official signs in: the overview appears in under 1 s
 
@@ -125,3 +138,77 @@ difference; To do = manual check still to run.
   `::test_name_suggestions_come_from_the_chamas_members`.
 - **Manual check, 24 Oct:** a misread name ("Kawira Mutembel") kept Accept
   unavailable until it was matched to the member.
+
+## T11 Sign in with Google, a password or a phone; officials type a texted code (D-037)
+
+- **Automated** (`test_web_auth.py`, fake Supabase): an official's password alone opens
+  nothing until the texted code; wrong codes are counted and the fifth ends the sign-in;
+  an official without a phone is told to ask for one; members sign in with a phone code
+  alone; codes are texted only to numbers with an account; Google goes through Supabase
+  with a PKCE challenge, and the code is exchanged with this browser's verifier;
+  problems come back to the sign-in page in plain words; Kenyan numbers are read in
+  every usual form.
+- **Manual check (to do):** with Google and Phone on in Supabase and test numbers set
+  (web_setup steps 6 and 7): Continue with Google as the treasurer, type the test code,
+  see the Overview as Alvin Muriithi; type a wrong code once and see "4 tries left"; on
+  the Phone tab, sign in as Alvin Wise with his test number and see My summary; try the
+  treasurer's number on the Phone tab and see that officials start with Google or email.
+
+## T12 Humble Sister's copy (D-036)
+
+- **Automated** (`test_web_names.py`, `test_deploy.py`): real names kept except the two
+  renamed; a rename must name a member and not take another's name; pages kept to the
+  month in `records_until`; a fictional copy still hides every real name; the release
+  serves the chamas marked `release: true`.
+- **Run, 6 Nov:** `demo-chama` wrote 11 workbooks, 127 pages to page 128 (July 2024), 12
+  members with real names, Beth Wamae shown as Alvin Muriithi and Esther Mwangi as Alvin
+  Wise; every old spelling points to the copy's names. Loaded and scored on 6 and 11 Nov
+  (7 members scored at page 128).
+
+## T13 Type a page (D-038)
+
+- **Automated** (`test_web_scans.py`, `test_web_db.py`): the page opens with each member
+  once and a line for each other running loan, carrying the last balance; agreed names
+  match at once; it needs no photo; no page for a future date or while an update runs;
+  pages go in date order, also against pages accepted but not yet added.
+- **Run, 6 Nov** (a throwaway database loaded like the release): page 129 (4 Aug 2024)
+  typed with chama B's real figures; the carried balances matched the real page;
+  no flags after typing; Accept; all five update steps done; bands at page 129; the
+  records call it "Entered here".
+- **Manual check (to do):** Type a page, choose 4 August 2024, type Alvin Wise's line
+  (Monthly 350, Repaid 10,000, Balance after 30,000), Accept, and watch the results open.
+
+## T14 A meeting in two or three photos (D-039)
+
+- **Automated** (`test_web_scans.py`, `test_worker_parts.py`): parts joined in order into
+  one draft; the date and totals from the first photo that has them, a different value
+  on a later one noted for the reviewer; a line seen on two photos gets a hint; a rate
+  limit on a later photo is waited out without reading the first again; a photo that is
+  not a page fails the scan, naming the photo; four photos are refused.
+- **Manual check (to do, needs Groq's paid plan, D-043):** cut a page photo into two
+  overlapping parts along its lines (for example `chama_b_p130.jpg`, where the page is
+  photographed sideways: left part with the date and lines 1 to 6, right part with lines
+  6 to 11), send both, and check the review shows "Part 1 of 2" and "Part 2 of 2", all 11
+  lines, and a hint on the repeated line 6.
+
+## T15 Each step opens the next (D-040)
+
+- **Automated:** none (page behaviour).
+- **Manual check (to do):** after sending a photo, the status page opens the review by
+  itself when reading ends; Accept opens the records update; when it finishes, "Who to
+  follow up after page N" appears below with each member's colour and main reason, and
+  buttons to see the whole chama or add the next page. The step bar at the top shows the
+  current step on every page.
+
+## T16 A real texted code through Africa's Talking (D-042)
+
+- **Automated** (`test_sms_hook.py`, fake Africa's Talking): a signed request for a
+  member's number is texted; the sandbox username uses the sandbox; an unsigned, old or
+  altered request texts nothing; only numbers with an active account are texted;
+  Africa's Talking's refusals and a bad key are reported to Supabase; without settings it
+  says what to add; the code never reaches the log.
+- **Manual check (to do):** on the live Space (or the laptop behind ngrok), with the
+  Send SMS hook and `AFRICASTALKING_*` set (web_setup step 8): sign in as the treasurer
+  with a number that is not a test number. With `sandbox`, the code appears in Africa's
+  Talking's simulator; with a live app, on the phone. The API log shows
+  `sms hook: code sent to the number ending ...`.
