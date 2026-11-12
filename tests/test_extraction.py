@@ -202,14 +202,15 @@ GROQ = {"base_url": "https://api.example.test/openai/v1", "api_key_env": "TEST_E
         "model": "open-model", "max_tokens": 3500, "request_options": {"reasoning_effort": "none"}}
 
 
-def openai_client(status=200, content=None, finish_reason="stop", headers=None, sent=None):
+def openai_client(status=200, content=None, finish_reason="stop", headers=None, sent=None,
+                  error="limit reached"):
     """An httpx client whose requests never leave the test: answers like an
     OpenAI-style chat completions API."""
     def handler(request):
         if sent is not None:
             sent.append(request)
         if status != 200:
-            return httpx.Response(status, json={"error": {"message": "limit reached"}},
+            return httpx.Response(status, json={"error": {"message": error}},
                                   headers=headers or {})
         return httpx.Response(200, json={
             "model": "open-model",
@@ -379,3 +380,26 @@ def test_sample_is_spread_through_the_ledger():
     sample = sample_photos(photos, 5)
     assert sample[0] == "p001.jpg" and sample[-1] == "p100.jpg" and len(sample) == 5
     assert sample_photos(photos[:3], 10) == photos[:3]
+
+
+# Groq's answer on 12 Nov 2026 when one page's answer is bigger than the free plan's
+# per-minute output allowance (D-043): a 429 that no wait will get through
+TOO_LARGE = ("Request too large for model `qwen/qwen3.8-27b` in organization `org_x` service tier `on_demand` "
+             "on output tokens per minute (OTPM): Limit 1000, Requested 1237. The request's expected output "
+             "tokens exceed the enforced limit; reduce max_tokens (or the request's expected output) and try again.")
+
+
+def test_a_page_too_long_for_the_free_plan_is_not_retried_and_says_what_to_do(monkeypatch):
+    monkeypatch.setenv("TEST_EXTRACTION_KEY", "secret")
+    with pytest.raises(ExtractionFailed) as e:
+        OpenAICompatibleExtractor(GROQ, openai_client(status=429, error=TOO_LARGE)).extract(b"jpeg")
+    assert e.value.transient is False
+    assert "Type the page in instead" in str(e.value) and "org_x" not in str(e.value)
+
+
+def test_a_rate_limit_says_how_long_to_wait_from_the_message(monkeypatch):
+    monkeypatch.setenv("TEST_EXTRACTION_KEY", "secret")
+    error = "Rate limit reached on tokens per minute (TPM): Limit 8000, Used 7000. Please try again in 27.4s."
+    with pytest.raises(ExtractionFailed) as e:
+        OpenAICompatibleExtractor(GROQ, openai_client(status=429, error=error)).extract(b"jpeg")
+    assert e.value.transient is True and "Try again in 27 s" in str(e.value)
