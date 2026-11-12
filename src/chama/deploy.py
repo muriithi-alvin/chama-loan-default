@@ -383,7 +383,10 @@ def publish(ref: str = "main", rebuild: bool = False, api=None, bundle: Path | N
                "SUPABASE_URL": values["SUPABASE_URL"], "SUPABASE_PUBLISHABLE_KEY": values["SUPABASE_PUBLISHABLE_KEY"],
                "RELEASE_OFFICIAL_EMAIL": values["RELEASE_OFFICIAL_EMAIL"],
                "RELEASE_MEMBER_EMAIL": values["RELEASE_MEMBER_EMAIL"]}
-    for optional in ("RELEASE_OFFICIAL_PHONE", "RELEASE_MEMBER_PHONE", "TWO_STEP_FOR_OFFICIALS"):
+    for optional in ("RELEASE_OFFICIAL_PHONE", "RELEASE_MEMBER_PHONE", "TWO_STEP_FOR_OFFICIALS",
+                     # texting sign-in codes through Africa's Talking (D-042)
+                     "SMS_HOOK_SECRET", "AFRICASTALKING_USERNAME", "AFRICASTALKING_API_KEY",
+                     "AFRICASTALKING_SENDER_ID"):
         if os.getenv(optional, "").strip():
             secrets[optional] = os.environ[optional].strip()
     for key, value in variables.items():

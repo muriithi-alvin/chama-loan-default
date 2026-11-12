@@ -171,6 +171,10 @@ kept: it must say "kept in the storage bucket".
    the log's last lines.
 6. In Supabase, **Authentication > URL Configuration > Redirect URLs**: add
    `https://<owner>-kibaba.hf.space/api/session/google/callback`.
+   For real texted codes (D-042), also set **Authentication > Hooks > Send SMS hook**
+   to `https://<owner>-kibaba.hf.space/api/hooks/send-sms` with its secret, and put
+   `SMS_HOOK_SECRET` and the `AFRICASTALKING_*` settings in `.env` before step 4 (or
+   run `deploy-publish` again after adding them): see docs/web_setup.md, step 8.
 7. Open `https://<owner>-kibaba.hf.space/api/health`: `ready`, with storage "kept in the
    storage bucket". Then sign in and add page 129.
 

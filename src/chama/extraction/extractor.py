@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 import ssl
 import time
 from dataclasses import dataclass
@@ -128,6 +129,9 @@ class OpenAICompatibleExtractor:
                 transient=True,
             ) from e
         if response.status_code != 200:
+            if response.status_code in (413, 429) and _too_large(response):
+                # Waiting does not help: the plan cannot take this request at all (D-043)
+                raise ExtractionFailed(TOO_LARGE_FOR_PLAN)
             raise ExtractionFailed(_http_problem(response, self.api_key_env),
                                    transient=response.status_code == 429 or response.status_code >= 500)
 
@@ -152,17 +156,37 @@ class OpenAICompatibleExtractor:
         )
 
 
+TOO_LARGE_FOR_PLAN = (
+    "This page is too long for the free reading service, so it was not read. Type the page in instead "
+    "(Type a page). For the admin: Groq's free plan now allows this model about 1,000 answer tokens a "
+    "minute and a ledger page needs 1,200 to 2,000; its paid Developer plan (about US$0.01 a page) "
+    "lifts the limit (docs/handover.md, D-043).")
+
+
+def _error_message(response: httpx.Response) -> str:
+    try:
+        return str((response.json().get("error") or {}).get("message", ""))
+    except ValueError:
+        return response.text[:300]
+
+
+def _too_large(response: httpx.Response) -> bool:
+    """Groq's answer when one request is bigger than the plan's per-minute allowance:
+    it comes as 429 like a rate limit, but no wait will let it through."""
+    message = _error_message(response).lower()
+    return "request too large" in message or "reduce max_tokens" in message
+
+
 def _http_problem(response: httpx.Response, key_env: str) -> str:
     """A short, safe explanation of a failed request (the key is never shown)."""
-    try:
-        detail = (response.json().get("error") or {}).get("message", "")
-    except ValueError:
-        detail = response.text[:200]
+    detail = _error_message(response)[:200]
     status = response.status_code
     if status in (401, 403):
         return f"The API key was rejected: check {key_env} in .env."
     if status == 429:
         wait = response.headers.get("retry-after")
+        if not wait and (found := re.search(r"try again in ([\d.]+)s", detail)):
+            wait = str(round(float(found.group(1))))
         return ("The extraction service's rate limit was reached. "
                 + (f"Try again in {wait} s." if wait else "Try again in a minute."))
     if status == 413:

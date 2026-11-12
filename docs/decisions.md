@@ -880,3 +880,50 @@ was rehearsed on 11 Nov 2026 (PostgreSQL 16, every table's rows equal); the imag
 has still never been built, and whether a bucket mounts on CPU Basic is not stated by
 Hugging Face's documentation, so the first start's log and the health check are the
 test. The laptop release (D-034) stays for demonstrations offline.
+
+## D-042 Sign-in codes are texted through Africa's Talking, by Supabase's Send SMS hook
+**Context.** Officials confirm every sign-in with a texted code (D-037). Supabase texts
+through Twilio, MessageBird, Vonage or TextLocal. On 11 Nov 2026 a Twilio trial could
+not be used: a trial cannot create a Verify service and cannot send a custom message,
+and an upgraded Twilio account costs about US$0.31 a text to Kenya, with Safaricom
+also asking for a registered sender name (about 4 weeks). Africa's Talking is a Kenyan
+provider at well under a shilling a text, and Supabase's Send SMS hook, on its free
+plan, hands each code to a web address of the project's choosing instead of texting it.
+**Decision.** Kibaba's API takes the hook at `POST /api/hooks/send-sms` and texts the
+code through Africa's Talking's SMS API (`services/sms_hook.py`). Before sending it
+checks the Standard Webhooks signature with the secret Supabase gives
+(`SMS_HOOK_SECRET`), refuses a signature older than 5 minutes, and texts only numbers
+that belong to an active Kibaba account, so nobody can make the chama pay for texts to
+other numbers. It answers within Supabase's 5 seconds (Africa's Talking gets 4), in the
+shape Supabase expects, and never logs the code; numbers appear as their last three
+digits. With the username `sandbox` it uses Africa's Talking's free test environment,
+whose texts appear in its online simulator, not on phones.
+**Consequences.** Real texts need an Africa's Talking account with credit, and Supabase
+needs a public HTTPS address to call, so texting works on the live Space (or the laptop
+behind ngrok), not on localhost. Supabase's test numbers still work without any of this.
+A sender name such as KIBABA can be requested from Africa's Talking later
+(`AFRICASTALKING_SENDER_ID`); until then their default sender is used. The request and
+answer formats come from Africa's Talking's official Python library, as their
+documentation site refused automated reading; no live text has been sent yet.
+
+## D-043 Groq's free plan can no longer read most pages; typing is the free route
+**Context.** On 12 Nov 2026, measuring extraction (`extract-eval`), most pages were
+refused. Groq's free plan now limits Qwen 3.8 27B, its only model that reads images, to
+1,000 answer (output) tokens a minute, and a ledger page's answer needs about 1,200
+(11 lines) to 2,000 (18 lines). Groq judges each request against its own estimate of the
+answer, so some pages pass and most do not; it answers with HTTP 429 like a rate limit,
+so Kibaba waited and tried again three times, then told the official to try again.
+A 1,000-token answer cap cuts the page off. Groq offers no other vision model now.
+**Decision.** A "request too large" answer is no longer treated as a rate limit: the
+scan fails at once with a plain message telling the official to type the page in
+(D-038), and the admin note names the fix. The status page of a failed scan offers
+"Type the page in". Reading photos as designed needs Groq's paid Developer plan (the
+same model and settings; at the listed US$0.80 / US$4.00 per million tokens, about
+US$0.01 a page), which lifts the per-minute limit; no code changes. Accuracy measured on
+the four pages that were read (milestone 3 report §2).
+**Rejected.** Free vision models whose providers may use requests to train (the pages
+show members' names); running a model on the laptop (D-025); shrinking the answer
+format to fit 1,000 tokens (a change to the reading itself, with new accuracy to
+measure, too late before the release; future work).
+**Consequences.** On the free plan, officials enter pages by typing; photos are read
+once the Groq account is on the Developer plan. Typing needs no outside service at all.

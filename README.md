@@ -3,9 +3,15 @@
 Predicting loan default in Kenyan Chama groups using behavioural and financial
 indicators: a multi-source data engineering and MLOps framework.
 
-The system gives Chama officials a **risk score, a risk category and an
-explanation** for each loan request. It does **not** approve or reject loans;
-the final decision stays with the officials.
+Kibaba, the system built here, tells a chama's officials which members to
+follow up before the next meeting, and why: after each meeting's ledger page is
+photographed or typed in and checked, every member with a loan gets a colour
+(**Follow up now**, **Keep an eye on**, **Less likely to miss**) with the main
+reasons. It does **not** approve or reject loans; the decision stays with the
+officials. Humble Sister (chama B) is the first chama to use it.
+
+**New here? Start with [docs/handover.md](docs/handover.md)**: what each part is,
+every setting, the everyday tasks and what is still open.
 
 ## Project phases
 
@@ -13,9 +19,9 @@ the final decision stays with the officials.
 | --- | --- | --- |
 | M1 | Data pipeline: ingest, anonymise, validate, clean | Done |
 | M2 | Features and models (Logistic Regression, Random Forest, XGBoost, SHAP), MLflow tracking, trained in Colab | Done |
-| M3 | MLOps: ledger photo extraction, model serving, registry, monitoring with Evidently, Docker | In progress |
-| M4 | Web interface for officials and members: sign-in and roles, records, scan a ledger page, early-warning bands with reasons (D-026 to D-028) | In progress |
-| M5 | Report and defence | Planned |
+| M3 | MLOps: ledger photo extraction, model serving, registry, monitoring with Evidently, containers ([report](docs/milestone_3_report.md)) | Done; the release image's first build runs at the first publish |
+| M4 | Web interface, Kibaba: sign-in (password, Google, phone, texted codes), roles, records, scan or type a page, early-warning bands with reasons, the live release (D-026 to D-042) | Done; the live publish and usability sessions are the user's next steps ([handover](docs/handover.md#9-still-open)) |
+| M5 | Report and defence | In progress |
 
 ## Folder structure
 
@@ -27,7 +33,8 @@ chama-loan-default/
 │   ├── raw/           Excel extracted from the photos, as recorded
 │   ├── interim/       Working files, incl. the name review files (keep these)
 │   └── processed/     Outputs ready for modelling
-├── docs/              Documentation and PlantUML diagrams
+├── deploy/            The live release's Space files (Dockerfile, start.sh)
+├── docs/              Documentation and PlantUML diagrams (start with handover.md)
 ├── notebooks/         Exploration only; final code lives in src/
 ├── sql/               Database schema (runs automatically in Docker)
 ├── src/chama/         The pipeline code
@@ -37,7 +44,10 @@ chama-loan-default/
 │   ├── validation/    Data quality report
 │   ├── features/      Indicators for modelling (M2)
 │   ├── extraction/    Ledger photo -> raw rows with a vision model, checks (M3)
-│   └── web/           The web interface's API, scoring and job worker (M4)
+│   ├── models/        Training, registry, drift (M2, M3)
+│   ├── web/           The web interface's API, sign-in, scoring and job worker (M4)
+│   ├── deploy.py      The releases: bundle, publish, the laptop release
+│   └── release_storage.py  The live Space's records kept in its storage bucket
 ├── frontend/          The web interface's pages (Next.js, TypeScript, Tailwind) (M4)
 ├── transform/         dbt project: staging -> analytics (clean tables, loans, checks)
 └── tests/             Automated tests (pytest)
@@ -65,6 +75,14 @@ chama-loan-default/
   photos are kept outside the web folders; logs hold codes, never names.
   With `DEMO_MODE=true`, every page shows fictional names and no real ledger
   photo, for projectors (D-027, D-028).
+- Humble Sister's officials agreed, under an MOU, to its members' real names on
+  screen (D-036) and to its records being held on Hugging Face for the live site,
+  in a private dataset and a private storage bucket (D-041). Its interface copy
+  renames two members (Beth Wamae as Alvin Muriithi, Esther Mwangi as Alvin Wise)
+  so the project's own accounts can be tested; chama B's records are unchanged.
+- Sign-in is Supabase's: passwords, Google, or a code texted to the phone;
+  officials confirm every sign-in with a texted code (D-037). Codes are texted
+  through Africa's Talking, only to numbers with an account, and never logged (D-042).
 - Data is used with the written permission of each Chama's officials.
 
 ## Setup (Windows, PowerShell)
@@ -104,9 +122,11 @@ Each raw file has four sheets that mirror the ledger: **Statements**, **Meetings
 
 - [docs/milestone_1_report.md](docs/milestone_1_report.md) — Milestone 1: what was built, decisions, stack and all commands
 - [docs/milestone_2_report.md](docs/milestone_2_report.md) — Milestone 2: targets, features, models, tests, results, the chosen model and all commands
-- [docs/web_setup.md](docs/web_setup.md) — Milestone 4: setting up sign-in, the demo chama, accounts, and running Kibaba, the web interface
+- [docs/handover.md](docs/handover.md) — **start here**: how everything fits, every setting, everyday tasks, what is still open
+- [docs/milestone_3_report.md](docs/milestone_3_report.md) — Milestone 3: reading ledger photos, serving, registry, drift, containers
+- [docs/web_setup.md](docs/web_setup.md) — Milestone 4: setting up sign-in (password, Google, phone, Africa's Talking), Humble Sister's copy, accounts, and running Kibaba
 - [docs/m4_master_prompt.md](docs/m4_master_prompt.md) — Milestone 4: the pages, roles and rules the web interface is built to
-- [docs/deployment.md](docs/deployment.md) — the HTTPS release on Hugging Face and Supabase (demo chama only)
+- [docs/deployment.md](docs/deployment.md) — the releases: on the laptop behind ngrok, and live on Hugging Face
 - [docs/m4_test_record.md](docs/m4_test_record.md) — scenarios T1 to T10: automated tests and manual checks
 - [docs/traceability.md](docs/traceability.md) — from each objective to its requirements and tests
 - [docs/usability_test.md](docs/usability_test.md) — the usability test with officials and members
@@ -232,10 +252,13 @@ the same typing rules as the hand-typed Excel files ([data_dictionary.md](docs/d
 so every later step reads its rows unchanged (decisions D-024, D-025). Checks flag the
 lines to look at, and a person reviews the rows before they are loaded.
 
-The default provider is the open-weight Qwen 3.8 27B model on Groq's free
-plan. Create a key at https://console.groq.com/keys, set `GROQ_API_KEY` in
-`.env`, and turn on Zero Data Retention under Data Controls in the Groq
-console. The free plan reads roughly one page a minute. The Claude API (paid,
+The default provider is the open-weight Qwen 3.8 27B model on Groq. Create a
+key at https://console.groq.com/keys, set `GROQ_API_KEY` in `.env`, and turn on
+Zero Data Retention under Data Controls in the Groq console. Since November 2026
+Groq's free plan refuses most ledger pages (their answers are longer than its
+per-minute allowance), so reading photos needs Groq's paid Developer plan, about
+US$0.01 a page; on the free plan, officials type pages in instead (D-043).
+Measured accuracy is in [docs/milestone_3_report.md](docs/milestone_3_report.md). The Claude API (paid,
 `ANTHROPIC_API_KEY`) is a second provider for comparison; providers and their
 settings are under `extraction` in `config/pipeline.yaml`.
 
@@ -260,12 +283,22 @@ computer.
 
 ## Running the web interface, Kibaba (Milestone 4)
 
-Officials see which members to follow up and why, browse the records and
-scan a ledger page; members see their own loans and contributions (D-026).
-The pages are a Next.js app in `frontend/`; the rules and data sit in a
-FastAPI API and a job worker in `src/chama/web/` (D-027). Sign-in uses
-Supabase Auth. Full setup, including the demo chama and accounts, is in
+Officials see which members to follow up and why, browse the records, and add
+each month's page by photo (up to 3 photos of one meeting) or by typing it into a
+ledger already filled with the members and their balances; each step opens the
+next, through to the results (D-038 to D-040). Members see their own loans and
+contributions (D-026). The pages are a Next.js app in `frontend/`; the rules and
+data sit in a FastAPI API and a job worker in `src/chama/web/` (D-027). Sign-in
+uses Supabase Auth. Full setup, including Humble Sister's copy and accounts, is in
 [docs/web_setup.md](docs/web_setup.md).
+
+The quickest way to see it on this laptop (the release, with its own database):
+
+```powershell
+python -m chama.pipeline serve-release --address https://preview.localhost   # then open http://localhost:3000
+```
+
+Or run the four parts yourself, on the laptop's main database:
 
 ```powershell
 docker compose up -d                          # the database

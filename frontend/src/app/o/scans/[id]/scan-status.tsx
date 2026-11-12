@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Camera, RotateCw } from "lucide-react";
+import { ArrowRight, Camera, Keyboard, RotateCw } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -109,6 +109,9 @@ export function ScanStatus({ id }: { id: number }) {
             </button>
             <Link href="/o/scan" className="inline-flex min-h-14 items-center gap-2 rounded-button border-2 border-ink px-6 text-[18px] font-bold text-ink no-underline hover:bg-ice hover:text-ink">
               <Camera aria-hidden="true" size={20} /> Take new photos
+            </Link>
+            <Link href="/o/type" className="inline-flex min-h-14 items-center gap-2 rounded-button border-2 border-ink px-6 text-[18px] font-bold text-ink no-underline hover:bg-ice hover:text-ink">
+              <Keyboard aria-hidden="true" size={20} /> Type the page in
             </Link>
           </>
         )}

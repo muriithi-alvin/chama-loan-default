@@ -5,7 +5,8 @@ and the tests that check them. Requirement IDs (G1, OFF-3, X10 and so on) are
 the ones in `docs/m4_master_prompt.md`; scenarios T1 to T10 and their manual
 checks are in [m4_test_record.md](m4_test_record.md). Automated tests are in
 `tests/` and the dbt tests in `transform/`. All run on every push (GitHub
-Actions): 235 passed on 2 Nov 2026.
+Actions): 337 tests on 12 Nov 2026 (336 pass and 1 is skipped on Windows, where
+symbolic links need extra rights; it runs on GitHub's Linux).
 
 **Status:** Done; Partly (met with a stated gap); Cut (dropped after the
 Sprint II review as not needed, now future work); Pending (built, waiting for
@@ -30,12 +31,12 @@ a loan (G2, N1).
 | **M2-3** Train and compare models suited to small data | — | `models/train.py` (3 models × 4 imbalance strategies) | `test_models.py` (every target, model and strategy gives scores between 0 and 1; prior correction) | MLflow experiments; M2 report §9, §12 | Done |
 | **M2-4** Validate honestly | — | walk forward by year, members held out, bootstrap intervals (D-020); a chama the model never saw (D-029) | `test_models.py`, `test_held_out.py` | M2 report §10, §12; `evaluate-chama chama_a` | Done for chama B; chama A Pending its pages |
 | **M2-5** Explain with SHAP and map scores to categories | G3, G4, OFF-3 | `models/explain.py`; bands by share (D-022); `web/services/reasons.py` | `test_web_reasons.py` (every model feature has a plain sentence; forbidden words never used) | M2 report §14–15 | Done |
-| **M3-1** Read ledger photos | OFF-8 to OFF-10, S-2 | `extraction/` (Groq, Claude for comparison; D-024, D-025) | `test_extraction.py` (25) | `extract-eval` accuracy, `docs/extraction_log.md` | Done |
+| **M3-1** Read ledger photos | OFF-8 to OFF-10, S-2 | `extraction/` (Groq, Claude for comparison; D-024, D-025, D-035); a meeting in up to 3 photos (D-039) | `test_extraction.py` (55), `test_worker_parts.py` (5) | `extract-eval` on 4 pages (67.5% of cells, 78.3% of amounts right), [milestone_3_report.md](milestone_3_report.md) §2 | Done; on Groq's free plan most pages are refused (D-043), so photos need its paid plan, and typing is the free route |
 | **M3-2** Serve the model | S-4, S-6 | API and worker score each accepted page | `test_web_auth.py` (roles on every route) | live scoring after Accept (T3) | Done |
 | **M3-3** Model registry | S-8 | `models/registry.py`, `register-model` (D-030) | `test_registry.py` | version 1 @champion, checksum saved with each score | Done |
 | **M3-4** Monitoring | S-7 | `models/drift.py`, `drift` command (D-031) | `test_drift.py` | first report 30 Oct 2026 (MLflow `chama-missed-repayment-drift`) | Done |
-| **M3-5** Containers | — | PostgreSQL in Docker Compose; the release image for the deployment | — | Sprint III deployment | Pending |
-| **M4** Officials see who to follow up and why; members see their own records | G1 to G5, all OFF, MEM, X, S | `frontend/`, `src/chama/web/` (D-026 to D-028) | see section 2 | T1 to T10 | Done (see section 2 for the cuts) |
+| **M3-5** Containers | — | PostgreSQL in Docker Compose; the release image, its database inside the container and its records in a storage bucket (D-033, D-041) | `test_deploy.py` (24), `test_release_storage.py` (8) | dump and restore rehearsed 11 Nov; every pinned package has a Linux build (12 Nov); [milestone_3_report.md](milestone_3_report.md) §6 | Partly: the image's first build runs at the first publish |
+| **M4** Officials see who to follow up and why; members see their own records | G1 to G5, all OFF, MEM, X, S, P | `frontend/`, `src/chama/web/` (D-026 to D-028, D-036 to D-042) | see section 2 | T1 to T16 | Done (see section 2 for the cuts) |
 
 ## 2. Requirements (web interface) to tests
 
@@ -45,7 +46,7 @@ a loan (G2, N1).
 | G2 | The system suggests, officials decide; no approve, reject or "defaulter" | wording on every page; band key | `test_sentences_are_plain_and_never_use_forbidden_words` | walkthrough | Done |
 | G3 | Early warning only: a band and reasons, no score or percentage | `scoring.py` saves the band, never the score | `test_every_feature_of_the_model_has_a_template` | T2 | Done (bands renamed in plain words after Sprint II) |
 | G4 | Every score shows where it came from | member page "Based on" and "Technical details" (model, registry version, checksum) | `test_registry.py` (checksum) | T2 | Done |
-| G5 | Fictional names on a projector | demo chama (D-028), `DEMO_MODE` | `test_demo_mode_keeps_a_real_officials_name_off_screen`, `test_no_fictional_name_shares_a_word_with_a_real_name`, `test_demo_frames_rename_members_and_drop_free_text` | demo | Done |
+| G5 | Fictional names on a projector | `DEMO_MODE`; a fictional copy is still possible (`names: fictional`, D-028). Humble Sister's copy shows real names with its officials' agreement (D-036) | `test_demo_mode_keeps_a_real_officials_name_off_screen`, `test_no_fictional_name_shares_a_word_with_a_real_name`, `test_a_fictional_copy_still_hides_every_real_name` | demo | Done |
 | R1 | Official role | `auth.official` | `test_an_official_sees_only_their_own_chamas_members` | T1, T2 | Done |
 | R2 | Member role | `auth.member` | `test_a_member_gets_not_allowed_on_officials_routes`, `test_the_footer_status_gives_members_no_score_details` | T6 | Done |
 | R3 | Admin sets up chamas, users, roles | `web-user add/list/deactivate/codes` | `test_a_deactivated_account_can_be_given_another_member` | — | Partly: the command is done; the page (OFF-15) was cut |
@@ -68,7 +69,7 @@ a loan (G2, N1).
 | MEM-1 | My summary | `app/m/page.tsx` | — | T6 | Done |
 | MEM-2 | My loans | `app/m/loans/` | — | T6 | Done (brought forward from Sprint III) |
 | MEM-3 | No scores, other members or photos for members | `auth.member`; members' API | `test_a_member_gets_not_allowed_on_officials_routes` | T6 | Done |
-| X1 | Sign-in; an expired session says so | Supabase password check on the server, own session cookie | `test_sign_in_sets_an_httponly_session_and_a_csrf_cookie`, `test_wrong_password_is_refused_next_to_the_field`, `test_missing_email_is_refused_next_to_the_field`, `test_an_unknown_or_deactivated_account_gets_no_session` | T1, T7 | Done (Google sign-in cut) |
+| X1 | Sign-in; an expired session says so | Supabase: password, Google (PKCE) or a texted code, checked on the server; own session cookie (D-037) | `test_sign_in_sets_an_httponly_session_and_a_csrf_cookie`, `test_wrong_password_is_refused_next_to_the_field`, `test_an_unknown_or_deactivated_account_gets_no_session`, and P-1 to P-3 below | T1, T7, T11 | Done (Google sign-in, cut in Sprint III, added after the presentation) |
 | X2 | Safe sessions | HttpOnly cookie, CSRF token, same-origin check | `test_signing_out_ends_the_session`, `test_changes_need_the_sessions_csrf_token` | T7 | Done |
 | X3 | Loading, empty and error states | `loading.tsx`, `error.tsx`, empty states | — | walkthrough | Done |
 | X4 | Plain messages with a reference | `web/errors.py` | `test_errors_never_show_a_stack_trace` | T5, T8 | Done |
@@ -89,12 +90,29 @@ a loan (G2, N1).
 | S-8 | Model from the registry by alias, checksum per score | `models/registry.py` (D-030) | `test_registry.py` | — | Done |
 | N1–N5 | Out of scope: no approve or reject, no percentages or raw scores, no app, no payments, accepted pages not edited | — | `test_sentences_are_plain_and_never_use_forbidden_words` | — | Respected |
 
+### Added after the presentation (5 Nov 2026)
+
+The coordinator's and officials' requests at the presentation, numbered P.
+
+| ID | Requirement | Built in | Automated tests | Scenario | Status |
+| --- | --- | --- | --- | --- | --- |
+| P-1 | Sign in with Google | `routes/session.py` (`/api/session/google`, its callback; PKCE) | `test_google_goes_through_supabase_with_a_pkce_challenge`, `test_back_from_google_a_member_lands_on_their_page`, `test_google_problems_come_back_to_the_sign_in_page`, `test_google_without_the_browsers_verifier_is_refused` | T11 | Done |
+| P-2 | Sign in with a phone and a texted code | `services/signin.py`, `/api/session/phone`, `/api/session/code` | `test_a_member_signs_in_with_a_phone_and_the_texted_code`, `test_phone_sign_in_texts_only_numbers_with_a_members_account`, `test_wrong_codes_are_counted_and_the_fifth_ends_the_sign_in`, `test_phone_numbers_are_read_as_kenyan_numbers` | T11 | Done |
+| P-3 | Officials confirm each sign-in with a texted code (2FA) | `services/signin.py` (`first_step_done`), `app.signin_steps` | `test_an_officials_password_alone_opens_nothing_until_the_texted_code`, `test_an_official_without_a_phone_is_told_to_ask_for_one`, `test_back_from_google_an_official_still_types_the_code`, `test_a_waiting_sign_in_is_used_once` | T11 | Done |
+| P-4 | Real texts at a Kenyan price | Africa's Talking through Supabase's Send SMS hook (D-042), `routes/hooks.py`, `services/sms_hook.py` | `test_sms_hook.py` (14): signature, age, account check, Africa's Talking answers, no code in logs | T16 | Partly: tried against a fake; the first real text needs an Africa's Talking account with credit |
+| P-5 | Humble Sister by its real names; records to July 2024; two renamed test members | `demo.py` settings (`names: real`, `renames`, `records_until`; D-036) | `test_the_copy_keeps_real_names_except_the_two_renamed`, `test_records_until_keeps_pages_in_or_before_the_month`, `test_a_rename_must_name_a_member_and_not_take_anothers_name` | T12 | Done |
+| P-6 | Type a page into a ledger already holding the members' names | `/o/type`, `services/scans.start_typed` (D-038) | `test_a_typed_page_starts_with_every_member_and_the_balance_they_carried`, `test_a_typed_page_opens_with_the_last_meetings_members_and_balances`, `test_a_typed_page_needs_no_photo_but_a_scan_does` | T13 | Done |
+| P-7 | Up to 3 photos of one meeting | Scan page, `app.upload_photos`, worker (D-039) | `test_a_meeting_in_several_photos_is_read_as_one_page`, `test_three_photos_become_one_draft_in_order`, `test_a_rate_limit_on_a_later_photo_is_waited_out_without_reading_again`, `test_a_line_seen_on_two_photos_gets_a_hint` | T14 | Done |
+| P-8 | From photo to results without the menu | `FlowSteps`, scan status and run pages (D-040) | — (pages) | T15 | Done |
+| P-9 | Several chamas: each with its own name; the release serves those marked for it | `release: true`, `hosting: agreed` in `config/pipeline.yaml` | `test_the_release_serves_the_chamas_marked_for_it`, `test_real_names_go_to_hugging_face_only_when_the_hosting_is_agreed` | — | Partly: one email or phone still opens one chama |
+| P-10 | A live site that keeps its records | Hugging Face Space on PRO, private bucket (D-041) | `test_release_storage.py` (8), `test_the_space_keeps_its_records_in_a_private_bucket_at_data`, `test_a_bucket_that_is_not_private_is_not_attached` | — | Partly: the first publish is the user's, on 12 Nov |
+
 ## 3. Sprint III course criteria
 
 | Criterion | Where | Status |
 | --- | --- | --- |
-| A deployed HTTPS release | `serve-release` on the project laptop behind an ngrok tunnel, with Supabase sign-in (D-034), demo chama only: `deploy/huggingface/`, [deployment.md](deployment.md) | Pending: ready to deploy once the accounts exist |
+| A deployed HTTPS release | the laptop behind ngrok (D-034), and the live Hugging Face Space keeping its records in a private bucket (D-041): [deployment.md](deployment.md) | Partly: the laptop release runs; the Space is published by the user on 12 Nov |
 | Traceability from objectives to tests | this record | Done |
 | Usability testing with real users | [usability_test.md](usability_test.md) (script, tasks, questionnaire) | Pending: sessions with officials and members |
 | Failure-path demos | T4 (not a ledger page), T5 (wrong file), T7 (session ends), T8 (service down) | T8 seen for real; T4, T5, T7 to show |
-| Chapters 5 and 6, and a handover a stranger can follow | `docs/web_setup.md`; the report (M5) | Pending |
+| Chapters 5 and 6, and a handover a stranger can follow | [handover.md](handover.md), `docs/web_setup.md`, `docs/deployment.md`; the report (M5) | Handover done; chapters in the report (M5) |

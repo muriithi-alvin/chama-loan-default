@@ -75,19 +75,55 @@ cd ..
 
    The sign-in page shows "Continue with Google" only once Google is on.
 7. **Phone codes (D-037).** Officials confirm every sign-in with a code texted to
-   their phone, and members may sign in with a phone code alone. In Supabase,
-   **Authentication > Sign In / Providers > Phone**: turn it on and choose an
-   SMS provider. Twilio has a free trial (it texts only numbers you verify in
-   Twilio, which is enough to test with your own phone); every real text is
-   paid after that. Free for testing: under **Test Phone Numbers and OTPs**, add
-   `254712345678=123456` (your number without the +, and a fixed code): Supabase
-   then sends no text to that number and accepts that code. Supabase still needs
-   a provider filled in before test numbers work.
-   Supabase makes its own user for a phone the first time a code is sent, so
-   for phone codes turn **on** "Allow new users to sign up" (step 2). This is
-   safe here: Kibaba asks for a code only for a number that has an account in
-   app.users, and the Supabase key stays on the server, so nobody else can ask
-   Supabase for codes or sign in to Kibaba with a Supabase user of their own.
+   their phone, and members may sign in with a phone code alone.
+   1. **Authentication > Sign In / Providers > Phone**: turn it on. Supabase asks for
+      an SMS provider: choose **Twilio** and fill in the Account SID and Auth Token of
+      a free Twilio account (any Message Service SID, for example
+      `MG00000000000000000000000000000000`). Twilio itself never sends Kibaba's
+      texts: a Twilio trial cannot (11 Nov 2026), so the texts go through Africa's
+      Talking (step 8). Supabase only needs the provider filled in.
+   2. **Test numbers, free.** Under **Test Phone Numbers and OTPs**, add lines such as
+      `254712345678=123456` (the number without the +, then a fixed code) and set an
+      expiry date. Supabase sends no text to a test number and accepts that code, so
+      the whole sign-in can be tested with no texting at all. Remove your real
+      number from this list once step 8 works, or it will never get a real text.
+   3. **Authentication > Sign In / Providers > User Signups**: turn **on** "Allow new
+      users to sign up". Supabase makes its own user for a phone the first time a code
+      is sent. This is safe here: Kibaba asks for a code only for a number that has an
+      account in app.users, the Supabase key stays on the server, and the hook in
+      step 8 also texts only numbers with an account.
+   4. Give each person their phone: `web-user add ... --phone 07XXXXXXXX` (below), or
+      `RELEASE_OFFICIAL_PHONE` / `RELEASE_MEMBER_PHONE` for the release's accounts.
+8. **Real texts, through Africa's Talking (D-042).** Supabase hands each code to
+   Kibaba (`POST /api/hooks/send-sms`), and Kibaba texts it. This needs Kibaba at a
+   public HTTPS address (the live Space, or the laptop behind ngrok), so it cannot be
+   tried on localhost.
+   1. Sign up at https://account.africastalking.com. To try it free first, open the
+      **sandbox** app: its username is always `sandbox`; make an API key under
+      **Settings > API Key**. Sandbox texts appear in Africa's Talking's online
+      **simulator** (open it from the sandbox dashboard and enter the phone number),
+      never on a real phone. For real texts, create a live **app**, note its username,
+      make its API key, and top up the account (a text costs well under a shilling;
+      check the price on their pricing page).
+   2. In Supabase, **Authentication > Hooks > Add hook > Send SMS hook**: type
+      **HTTPS**, URL `https://<site address>/api/hooks/send-sms`, then **Generate
+      secret** and copy it (it starts `v1,whsec_`). Enable the hook and save.
+   3. Add to `.env` (and, for the live Space, run `deploy-publish` so they become its
+      secrets):
+
+      ```
+      SMS_HOOK_SECRET=v1,whsec_...
+      AFRICASTALKING_USERNAME=sandbox          # or your live app's username
+      AFRICASTALKING_API_KEY=...
+      AFRICASTALKING_SENDER_ID=                # empty until they approve a sender name
+      ```
+
+   4. Restart Kibaba, then sign in with a number that is not a test number. The API's
+      log shows `sms hook: code sent to the number ending 678` or the reason it was
+      not sent (for example `InsufficientBalance`). Supabase's own log is under
+      **Logs > Auth**.
+   5. A sender name such as `KIBABA`, instead of Africa's Talking's default, can be
+      requested in their dashboard; put it in `AFRICASTALKING_SENDER_ID` once approved.
 
 Officials without a phone cannot finish signing in. For development on this
 laptop only, `TWO_STEP_FOR_OFFICIALS=false` in `.env` turns the second step off.

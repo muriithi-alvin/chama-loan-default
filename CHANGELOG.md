@@ -6,6 +6,27 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
 ## M4 — branch `m4-web-interface`
 
+### Added — texts through Africa's Talking, and the handover, 12 Nov 2026
+
+- **Sign-in codes texted through Africa's Talking (D-042):** Supabase's Send SMS hook
+  calls `POST /api/hooks/send-sms`; Kibaba checks the signature (Standard Webhooks,
+  `SMS_HOOK_SECRET`, at most 5 minutes old), texts only numbers with an active account,
+  and never logs the code. `AFRICASTALKING_USERNAME=sandbox` uses the free test
+  environment. `deploy-publish` passes the settings to the Space as secrets.
+- **The sign-in page hides the password form** when Email is switched off in Supabase.
+- **Found and handled: Groq's free plan refuses most pages (D-043).** It now allows the
+  only vision model about 1,000 answer tokens a minute, and a page needs 1,200 to 2,000;
+  the refusal came as a rate limit, so Kibaba retried three times and said "try again".
+  Now it fails at once with a plain message pointing to Type a page, and a failed scan
+  offers "Type the page in". Photos need Groq's paid Developer plan (about US$0.01 a
+  page). Rate-limit messages now give Groq's own wait.
+- **Docs:** `docs/handover.md` (everything in one place), `docs/milestone_3_report.md`,
+  the README's milestones and overview, web_setup step 8 (Africa's Talking),
+  traceability (P-1 to P-10), the test record (T11 to T16), deployment.
+- **Measured:** `extract-eval` on 4 of the 10 sample pages before Groq's limit showed
+  (67.5% of cells and 78.3% of amounts right; milestone 3 report §2); every package
+  version pinned for the release image has a Linux build for Python 3.11 (PyPI, 259 pins).
+
 ### Added — the live release on Hugging Face, 11 Nov 2026
 
 - **Humble Sister may be hosted (D-041):** the MOU covers hosting Kibaba, recorded as

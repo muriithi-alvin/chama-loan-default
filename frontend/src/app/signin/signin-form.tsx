@@ -61,7 +61,7 @@ export function SignInForm({ ended, next, site, serverDown, step, error }: Props
   const id = useId();
   const methods = site?.methods ?? { password: true, google: false, phone: false };
   const ready = site?.sign_in_ready ?? true;
-  const [how, setHow] = useState<"email" | "phone">("email");
+  const [how, setHow] = useState<"email" | "phone">(methods.password || !methods.phone ? "email" : "phone");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
@@ -211,7 +211,7 @@ export function SignInForm({ ended, next, site, serverDown, step, error }: Props
         </>
       )}
 
-      {methods.phone && (
+      {methods.phone && methods.password && (
         <div role="tablist" aria-label="Sign in with" className="grid grid-cols-2 gap-1 rounded-button bg-ice p-1">
           {([["email", "Email", Mail], ["phone", "Phone", Smartphone]] as const).map(([key, label, Icon]) => (
             <button key={key} type="button" role="tab" aria-selected={how === key}
@@ -223,7 +223,7 @@ export function SignInForm({ ended, next, site, serverDown, step, error }: Props
         </div>
       )}
 
-      {how === "phone" && methods.phone ? (
+      {!methods.password && !methods.phone ? null : how === "phone" && methods.phone ? (
         <form onSubmit={withPhone} noValidate className="flex flex-col gap-5">
           <div className="flex flex-col gap-2">
             <label htmlFor={`${id}-phone`} className="text-[16px] font-bold">Phone number</label>
