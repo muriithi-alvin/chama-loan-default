@@ -10,8 +10,12 @@ Prepared features named `missingindicator_<feature>` are 1 when the feature
 had no value (for example no missed repayment yet), so they get their own
 sentences. A test fails if any feature of the model has no template.
 
+Every sentence is also written in Kiswahili (D-044), from templates of its
+own, not by a translation model: the same values always give the same words.
+
 Wording for Alvin to check (open decision 4). Never use: reject, approve,
-defaulter, bad member, credit score, probability, percent chance, AI decision.
+defaulter, bad member, credit score, probability, percent chance, AI decision;
+in Kiswahili: kataa, idhinisha, mdaiwa sugu, alama ya mkopo, asilimia.
 """
 from __future__ import annotations
 
@@ -194,27 +198,209 @@ MISSING: dict[str, tuple[str, str]] = {
 }
 
 
+# ---- Kiswahili (D-044) ---------------------------------------------------------------
+# Meetings (mikutano) and loans (mikopo) are both of the m-mi class, so a share
+# of them is written out whole here, with the noun, to keep the agreement right.
+
+MONTHS_SW = ("", "Januari", "Februari", "Machi", "Aprili", "Mei", "Juni", "Julai", "Agosti", "Septemba",
+             "Oktoba", "Novemba", "Desemba")
+
+
+def _times_sw(n: int, one: str, many: str) -> str:
+    return one if n == 1 else many.format(n=n)
+
+
+def _ago_sw(n: int) -> str:
+    """12 -> "miezi 12 iliyopita"; 107 -> "takriban miaka 9 iliyopita"."""
+    if n < 24:
+        return _times_sw(n, "mwezi 1 uliopita", "miezi {n} iliyopita")
+    return f"takriban miaka {round(n / 12)} iliyopita"
+
+
+def _meetings_share_sw(words: str, running: bool = False) -> str:
+    """share_words() of a set of meetings, with the noun: "takriban nusu ya mikutano"."""
+    one, many = ("wenye mkopo unaoendelea", "yenye mkopo unaoendelea") if running else ("", "")
+    if words.startswith("about 1 in "):
+        return " ".join(filter(None, [f"takriban mkutano 1 kati ya kila {words.rsplit(' ', 1)[1]}", one]))
+    phrase = {"about half": "takriban nusu ya mikutano", "most": "mingi ya mikutano", "all": "mikutano yote"}[words]
+    return " ".join(filter(None, [phrase, many]))
+
+
+def _loans_share_sw(words: str) -> str:
+    if words.startswith("about 1 in "):
+        return f"takriban mkopo 1 kati ya kila {words.rsplit(' ', 1)[1]} unaoendelea"
+    return {"about half": "takriban nusu ya mikopo inayoendelea", "most": "mingi ya mikopo inayoendelea"}[words]
+
+
+FRACTIONS_SW = {"a twentieth": "sehemu moja ya ishirini ya deni", "a tenth": "sehemu moja ya kumi ya deni",
+                "a fifth": "sehemu moja ya tano ya deni", "a quarter": "robo ya deni",
+                "a third": "theluthi moja ya deni", "half": "nusu ya deni", "three quarters": "robo tatu ya deni",
+                "all": "deni lote"}
+
+
+def _months_since_last_miss_sw(v) -> str:
+    n = _n(v)
+    if n == 0:
+        return "Hakulipa marejesho katika mkutano huu"
+    return f"Mara ya mwisho kukosa kulipa marejesho ilikuwa {_ago_sw(n)}"
+
+
+def _missed_last_3_sw(v) -> str:
+    n = _n(v)
+    if n == 0:
+        return "Alilipa marejesho katika kila moja ya mikutano 3 iliyopita"
+    if n >= 3:
+        return "Hakulipa marejesho katika mikutano yote 3 iliyopita"
+    return _times_sw(n, "Hakulipa marejesho katika mkutano 1 kati ya mikutano 3 iliyopita",
+                     "Hakulipa marejesho katika mikutano {n} kati ya mikutano 3 iliyopita")
+
+
+def _recent_missed_sw(v) -> str:
+    n = _n(v)
+    if n == 0:
+        return "Hakukosa kulipa marejesho hata mara moja ndani ya mwaka uliopita"
+    return _times_sw(n, "Alikosa kulipa marejesho katika mkutano 1 ndani ya mwaka uliopita",
+                     "Alikosa kulipa marejesho katika mikutano {n} ndani ya mwaka uliopita")
+
+
+def _recent_missed_share_sw(v) -> str:
+    words = share_words(float(v))
+    if words == "none":
+        return "Alilipa marejesho katika kila mkutano wenye mkopo unaoendelea ndani ya mwaka uliopita"
+    return f"Alikosa kulipa marejesho katika {_meetings_share_sw(words, running=True)}, ndani ya mwaka uliopita"
+
+
+def _repayment_ratio_sw(v) -> str:
+    share = float(v)
+    if share < 0.03:
+        return "Hakulipa karibu chochote cha deni katika mikutano 3 iliyopita"
+    if share >= 0.9:
+        return "Alilipa deni lote katika mikutano 3 iliyopita"
+    return f"Alilipa takriban {FRACTIONS_SW[fraction_words(share)]} kila mkutano, katika mikutano 3 iliyopita"
+
+
+def _months_in_records_sw(v) -> str:
+    n = _n(v)
+    if n < 12:
+        return _times_sw(n, "Amekuwa kwenye rekodi kwa mwezi 1", "Amekuwa kwenye rekodi kwa miezi {n}")
+    return _times_sw(n // 12, "Amekuwa kwenye rekodi kwa mwaka 1", "Amekuwa kwenye rekodi kwa miaka {n}")
+
+
+def _outstanding_vs_median_sw(v) -> str:
+    ratio = float(v)
+    if ratio >= 1.5:
+        return f"Anadaiwa takriban mara {ratio:.1f} ya mkopo wa kawaida katika chama"
+    if ratio >= 1.15:
+        return "Anadaiwa kidogo zaidi ya mkopo wa kawaida katika chama"
+    if ratio >= 0.85:
+        return "Anadaiwa takriban sawa na mkopo wa kawaida katika chama"
+    if ratio >= 0.4:
+        return "Anadaiwa chini ya mkopo wa kawaida katika chama"
+    return "Anadaiwa kidogo sana kuliko mkopo wa kawaida katika chama"
+
+
+def _oldest_open_loan_sw(v) -> str:
+    n = _n(v)
+    if n == 0:
+        return "Mkopo wake wa zamani zaidi unaoendelea ulianza mwezi huu"
+    return f"Mkopo wake wa zamani zaidi unaoendelea ulianza {_ago_sw(n)}"
+
+
+def _contribution_rate_sw(v) -> str:
+    words = share_words(float(v))
+    if words == "all":
+        return "Alilipa mchango wa kila mwezi katika kila mkutano ndani ya mwaka uliopita"
+    if words == "none":
+        return "Hakulipa mchango wowote wa kila mwezi ndani ya mwaka uliopita"
+    return f"Alilipa mchango wa kila mwezi katika {_meetings_share_sw(words)}, ndani ya mwaka uliopita"
+
+
+def _chama_missed_share_sw(v) -> str:
+    words = share_words(float(v))
+    if words == "none":
+        return "Kila mkopo unaoendelea katika chama ulipata marejesho katika mkutano huu"
+    if words == "all":
+        return "Hakuna mkopo unaoendelea katika chama uliopata marejesho katika mkutano huu"
+    return f"Katika mkutano huu, marejesho hayakulipwa kwa {_loans_share_sw(words)} katika chama"
+
+
+def _month_of_year_sw(v) -> str:
+    n = _n(v)
+    name = MONTHS_SW[n] if 1 <= n <= 12 else "mwezi huu"
+    if n in SCHOOL_FEES_MONTHS:
+        return f"Karo za shule zinadaiwa mwezi huu ({name})"
+    return f"Wakati huu wa mwaka ({name})"
+
+
+TEMPLATES_SW: dict[str, Callable[[object], str]] = {
+    "months_since_last_miss": _months_since_last_miss_sw,
+    "missed_last_3_meetings": _missed_last_3_sw,
+    "recent_missed": _recent_missed_sw,
+    "recent_missed_share": _recent_missed_share_sw,
+    "repayment_ratio_last_3_meetings": _repayment_ratio_sw,
+    "months_in_records": _months_in_records_sw,
+    "loans_so_far": lambda v: _times_sw(_n(v), "Amechukua mkopo 1 hadi sasa", "Amechukua mikopo {n} hadi sasa"),
+    "prior_rolled_over": lambda v: (
+        "Hajaingiza mkopo wa awali kwenye mkopo mkubwa zaidi" if _n(v) == 0
+        else _times_sw(_n(v), "Aliingiza mkopo 1 wa awali kwenye mkopo mkubwa zaidi",
+                       "Aliingiza mikopo {n} ya awali kwenye mikopo mikubwa zaidi")),
+    "open_loans": lambda v: _times_sw(_n(v), "Ana mkopo 1 unaoendelea", "Ana mikopo {n} inayoendelea"),
+    "outstanding_vs_chama_median": _outstanding_vs_median_sw,
+    "oldest_open_loan_months": _oldest_open_loan_sw,
+    "loan_started_this_meeting": _yes_no("Alichukua mkopo mpya katika mkutano huu",
+                                         "Hakuchukua mkopo mpya katika mkutano huu"),
+    "has_emergency_loan": _yes_no("Ana mkopo wa dharura unaoendelea", "Hana mkopo wa dharura unaoendelea"),
+    "has_school_fees_loan": _yes_no("Ana mkopo wa karo unaoendelea", "Hana mkopo wa karo unaoendelea"),
+    "recent_contribution_rate": _contribution_rate_sw,
+    "chama_missed_share": _chama_missed_share_sw,
+    "month_of_year": _month_of_year_sw,
+}
+
+MISSING_SW: dict[str, tuple[str, str]] = {
+    "months_since_last_miss": ("Hajawahi kukosa kulipa marejesho kwenye rekodi",
+                               "Amewahi kukosa kulipa marejesho hapo awali"),
+    "recent_missed_share": ("Mkopo ni mpya mno kuwa na rekodi ya marejesho ya mwaka uliopita",
+                            "Ana rekodi ya marejesho ya mwaka uliopita"),
+    "repayment_ratio_last_3_meetings": ("Mkopo ni mpya mno kuwa na rekodi ya marejesho ya mikutano 3 iliyopita",
+                                        "Ana rekodi ya marejesho ya mikutano 3 iliyopita"),
+    "recent_contribution_rate": ("Hakuna rekodi ya michango ya mwaka uliopita",
+                                 "Ana rekodi ya michango ya mwaka uliopita"),
+    "outstanding_vs_chama_median": ("Bado hakuna mkopo wa kawaida katika chama wa kulinganisha nao",
+                                    "Imelinganishwa na mkopo wa kawaida katika chama"),
+    "chama_missed_share": ("Hakuna mikopo mingine inayoendelea katika chama katika mkutano huu",
+                           "Kuna mikopo mingine inayoendelea katika chama katika mkutano huu"),
+}
+
+LANGUAGES = ("en", "sw")
+_BY_LANGUAGE = {
+    "en": (TEMPLATES, MISSING, "Part of the record is missing at this meeting"),
+    "sw": (TEMPLATES_SW, MISSING_SW, "Sehemu ya rekodi haipo katika mkutano huu"),
+}
+
+
 def base_feature(factor: str) -> str:
     return factor.removeprefix(INDICATOR)
 
 
-def has_template(factor: str) -> bool:
+def has_template(factor: str, lang: str = "en") -> bool:
+    templates, missing, _ = _BY_LANGUAGE[lang]
     if factor.startswith(INDICATOR):
-        return base_feature(factor) in MISSING
-    return factor in TEMPLATES
+        return base_feature(factor) in missing
+    return factor in templates
 
 
-def sentence(factor: str, values: dict) -> str:
+def sentence(factor: str, values: dict, lang: str = "en") -> str:
     """The sentence for one prepared feature, from the member's own values.
 
     `values` holds the member's unprepared features at the meeting (None or
-    NaN where a value is missing).
+    NaN where a value is missing). `lang` is "en" or "sw".
     """
+    templates, missing_words, gap = _BY_LANGUAGE[lang]
     base = base_feature(factor)
     value = values.get(base)
     missing = value is None or (isinstance(value, float) and math.isnan(value))
     if factor.startswith(INDICATOR) or missing:
-        if base not in MISSING:
-            return "Part of the record is missing at this meeting"
-        return MISSING[base][0] if missing else MISSING[base][1]
-    return TEMPLATES[base](value)
+        if base not in missing_words:
+            return gap
+        return missing_words[base][0] if missing else missing_words[base][1]
+    return templates[base](value)

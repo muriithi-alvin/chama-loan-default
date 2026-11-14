@@ -251,3 +251,29 @@ CREATE TABLE IF NOT EXISTS app.upload_photos (
     checksum   TEXT    NOT NULL,                  -- SHA-256 of this photo as sent
     PRIMARY KEY (upload_id, part)
 );
+
+-- D-044: the language an account reads the early-warning words in: English or
+-- Kiswahili. It applies to the reasons on the pages and to the meeting text.
+ALTER TABLE app.users ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en';
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_language') THEN
+        ALTER TABLE app.users ADD CONSTRAINT users_language CHECK (language IN ('en', 'sw'));
+    END IF;
+END
+$$;
+
+-- D-045: the text each official gets the day before a meeting, saying how many
+-- members to follow up. One row per official and meeting, written before the
+-- text is sent, so a restarted worker never sends it twice. Counts only: the
+-- text holds no member's name or code.
+CREATE TABLE IF NOT EXISTS app.meeting_texts (
+    chama_id     TEXT        NOT NULL,
+    meeting_date DATE        NOT NULL,
+    user_id      BIGINT      NOT NULL REFERENCES app.users (id),
+    status       TEXT        NOT NULL DEFAULT 'sending' CHECK (status IN ('sending', 'sent', 'failed')),
+    detail       TEXT,                        -- Africa's Talking's answer, or why nothing was sent
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    sent_at      TIMESTAMPTZ,
+    PRIMARY KEY (chama_id, meeting_date, user_id)
+);

@@ -143,8 +143,8 @@ def client(monkeypatch, tmp_path):
                  "end_session", "start_step", "step", "count_attempt", "end_step"):
         monkeypatch.setattr(users_data, name, getattr(store, name))
     monkeypatch.setattr(session, "member_names", lambda conn, chama: {"M-aaaa1111": "Alvin Wise"})
-    monkeypatch.setattr(officials.early_warning, "overview", lambda conn, chama: {"chama": chama})
-    monkeypatch.setattr(officials.early_warning, "member_page", lambda conn, chama, code: {"code": code})
+    monkeypatch.setattr(officials.early_warning, "overview", lambda conn, chama, lang: {"chama": chama})
+    monkeypatch.setattr(officials.early_warning, "member_page", lambda conn, chama, code, lang: {"code": code})
     monkeypatch.setattr(officials.records, "is_member_of", lambda conn, chama, code: code.startswith(chama))
 
     from chama.web.app import create_app
@@ -186,7 +186,7 @@ def test_sign_in_sets_an_httponly_session_and_a_csrf_cookie(client):
     assert "HttpOnly" not in csrf_cookie
     assert response.json()["user"] == {
         "name": "Alvin Muriithi", "role": "official", "position": "treasurer", "chama_id": "chama_demo",
-        "chama_name": "Humble Sister", "member_code": None,
+        "chama_name": "Humble Sister", "member_code": None, "language": "en",
     }
     token = client.cookies.get(auth.SESSION_COOKIE)
     assert token not in client.store.sessions            # only the hash is stored
@@ -244,6 +244,17 @@ def test_changes_need_the_sessions_csrf_token(client):
     assert client.post("/api/test-change", headers=csrf(client)).json() == {"ok": True}
 
 
+def test_the_language_of_the_reasons_is_saved_on_the_account(client, monkeypatch):
+    saved = []
+    monkeypatch.setattr(users_data, "set_language", lambda conn, user_id, language: saved.append((user_id, language)))
+    sign_in(client, OFFICIAL)
+    assert client.put("/api/me/language", json={"language": "sw"}).json()["error"]["code"] == "csrf"
+    assert client.put("/api/me/language", json={"language": "sw"}, headers=csrf(client)).json() == {"language": "sw"}
+    refused = client.put("/api/me/language", json={"language": "fr"}, headers=csrf(client))
+    assert refused.status_code == 422 and refused.json()["error"]["field"] == "language"
+    assert saved == [(OFFICIAL.id, "sw")]
+
+
 def test_changes_from_another_site_are_refused(client):
     response = client.post("/api/session", json={"email": OFFICIAL.email, "password": "right password"},
                            headers={"origin": "https://evil.example"})
@@ -275,7 +286,7 @@ def test_demo_mode_keeps_a_real_officials_name_off_screen(client, monkeypatch):
 
 
 def test_errors_never_show_a_stack_trace(client, monkeypatch):
-    def broken(conn, chama):
+    def broken(conn, chama, lang):
         raise RuntimeError("secret detail")
 
     monkeypatch.setattr(officials.early_warning, "overview", broken)

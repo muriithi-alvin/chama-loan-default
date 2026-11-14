@@ -8,6 +8,7 @@
     POST /api/session/code             the texted code; then the session starts
     POST /api/session/code/resend
     DELETE /api/session                sign out
+    PUT  /api/me/language              English or Kiswahili for the reasons (D-044)
 """
 from __future__ import annotations
 
@@ -91,6 +92,7 @@ def me(conn: Connection, user: User) -> dict:
             "chama_id": user.chama_id,
             "chama_name": chama_name(user.chama_id),
             "member_code": user.member_code,
+            "language": user.language,
         },
         "demo_mode": settings.demo_mode or is_demo_chama(user.chama_id),
     }
@@ -205,6 +207,21 @@ def sign_out(request: Request, response: Response, conn: Conn) -> dict:
 @router.get("/me")
 def who(conn: Conn, user: auth.SignedIn) -> dict:
     return me(conn, user)
+
+
+class Language(BaseModel):
+    language: str = ""
+
+
+@router.put("/me/language")
+def set_language(body: Language, conn: Conn, user: auth.SignedIn) -> dict:
+    """English or Kiswahili for the reasons and the meeting text (D-044)."""
+    from chama.web.services.reasons import LANGUAGES
+
+    if body.language not in LANGUAGES:
+        raise ApiError(422, "language", "Choose English (en) or Kiswahili (sw).", field="language")
+    users.set_language(conn, user.id, body.language)
+    return {"language": body.language}
 
 
 @router.get("/records-status")

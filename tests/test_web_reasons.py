@@ -76,3 +76,66 @@ def test_share_words():
     assert reasons.share_words(0.5) == "about half"
     assert reasons.share_words(0.75) == "most"
     assert reasons.share_words(1) == "all"
+
+
+# ---- Kiswahili (D-044) ----------------------------------------------------------------
+
+FORBIDDEN_SW = ["kataa", "idhinish", "mdaiwa sugu", "alama ya mkopo", "asilimia", "%"]
+
+
+def test_every_feature_of_the_model_has_a_kiswahili_template():
+    assert [f for f in MISSED_REPAYMENT.features if not reasons.has_template(f, "sw")] == []
+    assert set(reasons.MISSING_SW) == set(reasons.MISSING)
+
+
+@pytest.mark.parametrize("feature", MISSED_REPAYMENT.features)
+def test_kiswahili_sentences_are_plain_and_never_use_forbidden_words(feature):
+    for value in SAMPLES[feature]:
+        english = reasons.sentence(feature, {feature: value})
+        text = reasons.sentence(feature, {feature: value}, "sw")
+        assert text and text[0].isupper() and not text.endswith("."), text
+        assert text != english, text
+        assert not any(word in text.lower() for word in FORBIDDEN + FORBIDDEN_SW), text
+
+
+@pytest.mark.parametrize("feature", sorted(reasons.MISSING_SW))
+def test_missing_values_have_their_own_kiswahili_sentences(feature):
+    missing = reasons.sentence(f"missingindicator_{feature}", {feature: None}, "sw")
+    present = reasons.sentence(f"missingindicator_{feature}", {feature: 0.5}, "sw")
+    assert missing != present
+    assert reasons.sentence(feature, {feature: math.nan}, "sw") == missing
+
+
+def test_kiswahili_sentences_use_the_members_own_values():
+    sw = {f: (lambda v, f=f: reasons.sentence(f, {f: v}, "sw")) for f in MISSED_REPAYMENT.features}
+    assert sw["missed_last_3_meetings"](2) == "Hakulipa marejesho katika mikutano 2 kati ya mikutano 3 iliyopita"
+    assert sw["missed_last_3_meetings"](1) == "Hakulipa marejesho katika mkutano 1 kati ya mikutano 3 iliyopita"
+    assert sw["months_since_last_miss"](1) == "Mara ya mwisho kukosa kulipa marejesho ilikuwa mwezi 1 uliopita"
+    assert sw["months_since_last_miss"](107) == \
+        "Mara ya mwisho kukosa kulipa marejesho ilikuwa takriban miaka 9 iliyopita"
+    assert sw["open_loans"](1) == "Ana mkopo 1 unaoendelea" and sw["open_loans"](2) == "Ana mikopo 2 inayoendelea"
+    assert sw["outstanding_vs_chama_median"](2.4) == "Anadaiwa takriban mara 2.4 ya mkopo wa kawaida katika chama"
+    assert sw["recent_missed_share"](0.25) == ("Alikosa kulipa marejesho katika takriban mkutano 1 kati ya kila 4 "
+                                               "wenye mkopo unaoendelea, ndani ya mwaka uliopita")
+    assert sw["recent_contribution_rate"](0.5) == \
+        "Alilipa mchango wa kila mwezi katika takriban nusu ya mikutano, ndani ya mwaka uliopita"
+    assert sw["chama_missed_share"](0.3) == ("Katika mkutano huu, marejesho hayakulipwa kwa takriban mkopo 1 kati "
+                                             "ya kila 3 unaoendelea katika chama")
+    assert sw["repayment_ratio_last_3_meetings"](0.27) == \
+        "Alilipa takriban robo ya deni kila mkutano, katika mikutano 3 iliyopita"
+    assert sw["month_of_year"](9) == "Karo za shule zinadaiwa mwezi huu (Septemba)"
+
+
+def test_the_pages_show_the_officials_language_and_write_kiswahili_for_old_scores():
+    from chama.web.services.early_warning import shown_reasons
+
+    new = [{"feature": "open_loans", "sentence": "Has 2 loans running", "sentence_sw": "Ana mikopo 2 inayoendelea",
+            "effect": "raises risk"}]
+    old = [{"feature": "open_loans", "sentence": "Has 2 loans running", "effect": "raises risk"}]
+    assert shown_reasons(new, "en")[0] == {"feature": "open_loans", "sentence": "Has 2 loans running",
+                                           "effect": "raises risk"}
+    assert shown_reasons(new, "sw")[0]["sentence"] == "Ana mikopo 2 inayoendelea"
+    # a score saved before Kiswahili: written from the member's record at that meeting
+    assert shown_reasons(old, "sw", {"open_loans": 2})[0]["sentence"] == "Ana mikopo 2 inayoendelea"
+    # and without the record, the English sentence rather than nothing
+    assert shown_reasons(old, "sw", None)[0]["sentence"] == "Has 2 loans running"

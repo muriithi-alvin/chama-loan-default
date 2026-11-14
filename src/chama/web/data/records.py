@@ -101,6 +101,14 @@ def member_months_at(conn: Connection, chama_id: str, page_no: int) -> dict[str,
     return {r["member_code"]: r for r in rows}
 
 
+def member_features_at(conn: Connection, chama_id: str, page_no: int) -> dict[str, dict]:
+    """Every member's whole row of analytics.member_months at one meeting: the
+    values a reason's sentence is written from (D-044)."""
+    rows = _rows(conn, "SELECT * FROM analytics.member_months WHERE chama_id = :c AND page_no = :p",
+                 c=chama_id, p=page_no)
+    return {r["member_code"]: r for r in rows}
+
+
 # ---- One member ---------------------------------------------------------------
 
 

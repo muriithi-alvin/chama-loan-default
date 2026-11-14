@@ -7,7 +7,8 @@ chama's latest meeting, saved to app.risk_scores for the pages to read.
    meeting: one per member who owes on a loan after it.
 3. Band from the cut-offs: High at or above `high`, Medium at or above
    `medium`, otherwise Low. The score itself is never saved (G3).
-4. The three strongest SHAP factors, each as a sentence (reasons.py).
+4. The three strongest SHAP factors, each as a sentence in English and in
+   Kiswahili (reasons.py, D-044).
 
 Run by `python -m chama.pipeline score` and by the worker after a scan is
 accepted. Scores for earlier meetings are kept, so bands can be compared.
@@ -86,7 +87,8 @@ def reasons_for(model, X: pd.DataFrame, n: int = 3) -> list[list[dict]]:
         values = X.iloc[i].to_dict()
         factors = top_factors(contributions.iloc[i], n=n)
         out.append([
-            {"feature": f.factor, "sentence": sentence(f.factor, values), "effect": f.effect}
+            {"feature": f.factor, "sentence": sentence(f.factor, values),
+             "sentence_sw": sentence(f.factor, values, "sw"), "effect": f.effect}
             for f in factors.itertuples()
         ])
     return out

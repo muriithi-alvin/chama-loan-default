@@ -201,9 +201,10 @@ def run(run_id: int, conn: Conn, user: auth.Official) -> dict:
             score = scored.get(code)
             reasons = (score or {}).get("reasons") or []
             reason = next((r for r in reasons if r.get("effect") == "raises risk"), reasons[0] if reasons else None)
+            words = reason and ((user.language == "sw" and reason.get("sentence_sw")) or reason["sentence"])
             changed.append({"code": code, "name": display_name(names, code),
                             "band": score["band"] if score else None,
-                            "reason": reason["sentence"] if reason else None})
+                            "reason": words or None})
         changed.sort(key=lambda m: (order.get(m["band"], 3), m["name"]))
     return {**found, "page_no": upload["page_no"], "source": upload["source"], "steps": steps,
             "changed_members": changed}

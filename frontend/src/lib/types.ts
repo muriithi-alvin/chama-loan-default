@@ -12,8 +12,12 @@ export interface Me {
     chama_id: string;
     chama_name: string;
     member_code: string | null;
+    language: Language;
   };
 }
+
+/** The language of the early-warning words: reasons, band meanings, the meeting text (D-044). */
+export type Language = "en" | "sw";
 
 /** Before sign-in: which ways to sign in are switched on (D-037). */
 export interface Site {
@@ -58,6 +62,7 @@ export interface Meeting {
 
 export interface Overview {
   chama: { id: string; name: string };
+  language: Language;
   last_meeting: Meeting | null;
   scores: ScoreSource | null;
   scores_behind: boolean;
@@ -80,6 +85,7 @@ export interface MemberRow {
 export interface MemberPage {
   code: string;
   name: string;
+  language: Language;
   member_since: number | null;
   band: Band | null;
   meaning: string | null;

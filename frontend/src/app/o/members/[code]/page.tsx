@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ViewTransition } from "react";
 
-import { BandChip, Bead, BeadArc, EffectIcon, NoLoanChip } from "@/components/beads";
+import { BandChip, Bead, BeadArc, EFFECT_WORDS, EffectIcon, NoLoanChip } from "@/components/beads";
+import { LanguageSwitch } from "@/components/language-switch";
 import { Card, PageBody } from "@/components/page-header";
 import { dayAndTime, meetingWhen, money, month, monthShort } from "@/lib/format";
 import { LOAN_TYPE, loanStatus as status } from "@/lib/loans";
@@ -25,6 +26,8 @@ export default async function MemberDetail({ params }: { params: Params }) {
   const amounts = [...new Set(m.contributions.filter((c) => c.paid).map((c) => c.amount))];
   const running = m.loans.filter((l) => l.running);
   const past = m.loans.filter((l) => !l.running);
+  const sw = m.language === "sw";
+  const first = m.name.split(" ")[0];
 
   return (
     <PageBody className="gap-6">
@@ -44,20 +47,25 @@ export default async function MemberDetail({ params }: { params: Params }) {
             <span className="inline-flex rounded-full bg-white">{m.band ? <BandChip band={m.band} size="lg" /> : <NoLoanChip />}</span>
           </ViewTransition>
         </div>
-        <div className="condense-fold relative flex max-h-[140px] flex-col gap-1.5 overflow-hidden pr-28">
+        <div lang={m.language} className="condense-fold relative flex max-h-[140px] flex-col gap-1.5 overflow-hidden pr-28">
           {m.meaning && <p className="max-w-[42em] text-[19px] font-bold">{m.meaning}</p>}
           <p className="text-[16px] text-subtle">
             {m.note}
-            {m.member_since ? ` In the records since ${m.member_since}.` : ""}
+            {m.member_since ? (sw ? ` Yuko kwenye rekodi tangu ${m.member_since}.` : ` In the records since ${m.member_since}.`) : ""}
           </p>
         </div>
       </header>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
         <Card className="xl:col-span-7" aria-labelledby="mp-reasons">
-          <h2 id="mp-reasons" className="mb-1.5 text-[24px] sm:text-[26px]">Why, from {m.name.split(" ")[0]}&apos;s own record</h2>
+          <div className="mb-1.5 flex flex-wrap items-start justify-between gap-3">
+            <h2 id="mp-reasons" lang={m.language} className="text-[24px] sm:text-[26px]">
+              {sw ? `Kwa nini, kutoka kwenye rekodi ya ${first} mwenyewe` : <>Why, from {first}&apos;s own record</>}
+            </h2>
+            {m.reasons.length > 0 && <LanguageSwitch language={m.language} />}
+          </div>
           {m.reasons.length ? (
-            <ol>
+            <ol lang={m.language}>
               {m.reasons.map((r, i) => {
                 const up = r.effect === "raises risk";
                 return (
@@ -68,7 +76,7 @@ export default async function MemberDetail({ params }: { params: Params }) {
                     <span className="flex flex-col gap-1">
                       <span className="text-[18px] font-bold">{r.sentence}</span>
                       <span className={`text-[15px] font-bold ${up ? "text-high" : "text-low"}`}>
-                        Makes a missed repayment {up ? "more" : "less"} likely
+                        {EFFECT_WORDS[m.language].long[r.effect]}
                       </span>
                     </span>
                   </li>

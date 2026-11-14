@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api")
 
 @router.get("/overview")
 def overview(conn: Conn, user: auth.Official) -> dict:
-    return early_warning.overview(conn, user.chama_id)
+    return early_warning.overview(conn, user.chama_id, user.language)
 
 
 @router.get("/scores/latest")
@@ -37,4 +37,4 @@ def members(conn: Conn, user: auth.Official) -> dict:
 def member(code: str, conn: Conn, user: auth.Official) -> dict:
     if not records.is_member_of(conn, user.chama_id, code):
         raise not_allowed()   # another chama's member, or no such code: the same answer
-    return early_warning.member_page(conn, user.chama_id, code)
+    return early_warning.member_page(conn, user.chama_id, code, user.language)
