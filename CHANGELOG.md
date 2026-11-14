@@ -6,6 +6,30 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
 
 ## M4 — branch `m4-web-interface`
 
+### Added — reasons in Kiswahili, the meeting text, names learned from corrections, 12 Nov 2026
+
+- **Reasons in Kiswahili (D-044):** every reason sentence has a Kiswahili template
+  beside the English one, filled with the same values (no translation model). Scoring
+  saves both. English / Kiswahili on the Overview's "Members to talk to" and on a
+  member's reasons switches the reasons, the "more / less likely" words and the band's
+  meaning; the choice is kept on the account (`app.users.language`,
+  `PUT /api/me/language`). Older scores are written in Kiswahili from the member's
+  record at that meeting. The wording is for a fluent official to check.
+- **A text the day before each meeting (D-045):** with `MEETING_TEXTS=true`, the worker
+  texts each official with a phone at 9:00 Nairobi time (`MEETING_TEXT_HOUR`) the day
+  before the meeting day in `config/pipeline.yaml` (`meets: first sunday` for Humble
+  Sister): how many members to follow up now and to keep an eye on, in the official's
+  language, with the site's address. Counts only, never names. Sent once per official
+  and meeting (`app.meeting_texts`). `python -m chama.pipeline meeting-texts` previews
+  it; `--send-test` sends it now. `deploy-publish` passes both settings to the Space.
+- **Names learned from corrections (D-046):** when an official retypes a name the model
+  misread on a photographed page, Accept now keeps the misreading as one of that
+  member's spellings, so the next page with it is matched by itself. Only a reading like
+  the member's name and nobody else's known spelling is kept.
+- **Tests:** `test_meeting_texts.py` (12), `test_learned_names.py` (6), Kiswahili reasons
+  (6 more in `test_web_reasons.py`), the language route; a shared test-database fixture
+  in `tests/conftest.py`.
+
 ### Added — texts through Africa's Talking, and the handover, 12 Nov 2026
 
 - **Sign-in codes texted through Africa's Talking (D-042):** Supabase's Send SMS hook
@@ -20,6 +44,10 @@ Reasons behind the bigger choices are in [docs/decisions.md](docs/decisions.md).
   Now it fails at once with a plain message pointing to Type a page, and a failed scan
   offers "Type the page in". Photos need Groq's paid Developer plan (about US$0.01 a
   page). Rate-limit messages now give Groq's own wait.
+- **Fixed:** while a restarted worker loaded its model, `/api/health` failed with a server
+  error, because the worker's status kept the last run's "loaded" time. It now says "not
+  loaded" until the model is in. On the Space this happened at every start, as the
+  restored database brings the old status back.
 - **Docs:** `docs/handover.md` (everything in one place), `docs/milestone_3_report.md`,
   the README's milestones and overview, web_setup step 8 (Africa's Talking),
   traceability (P-1 to P-10), the test record (T11 to T16), deployment.

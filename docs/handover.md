@@ -70,6 +70,7 @@ Copy `.env.example` to `.env`; it explains each line. Never commit `.env`.
 | `PHONE_COUNTRY_CODE` | how 07... numbers are read | `254` |
 | `SMS_HOOK_SECRET` | checking Supabase's texting requests | Supabase > Authentication > Hooks |
 | `AFRICASTALKING_USERNAME`, `_API_KEY`, `_SENDER_ID` | sending texts | Africa's Talking dashboard (`sandbox` to test) |
+| `MEETING_TEXTS`, `MEETING_TEXT_HOUR` | the officials' text the day before each meeting (D-045); `true` in one copy of the site only | `false` and `9` by default |
 | `HF_TOKEN`, `HF_BUILD_TOKEN` | publishing; the Space's build reading the dataset | Hugging Face > Settings > Access Tokens (write; read) |
 | `GITHUB_READ_TOKEN` | the Space's build cloning the code | GitHub fine-grained token, this repository, Contents read-only |
 | `CLOUD_PSEUDONYM_KEY` | names to codes in the releases | made once, different from `PSEUDONYM_KEY` |
@@ -125,6 +126,14 @@ compares recent meetings with the training data (D-031).
 **Check health.** `https://<site>/api/health` shows the database, worker, model and,
 on the live Space, where pages are kept ("kept in the storage bucket").
 
+**The text before each meeting (D-045).** `python -m chama.pipeline meeting-texts`
+shows each chama's next meeting (from `meets` in `config/pipeline.yaml`), which
+officials get the text and what it says; add `--send-test` to send it now (not
+recorded, so the real one still goes). Set `MEETING_TEXTS=true` where the officials'
+accounts live, the laptop release or the Space, never both. Officials need a phone on
+their account. Each official's language (English or Kiswahili, chosen beside the
+reasons) is the text's language too.
+
 ## 6. The live site on Hugging Face
 
 Full steps: [deployment.md](deployment.md), last section. In short: PRO (US$9 a
@@ -174,6 +183,8 @@ cheapest way to show the sign-in.
 | Reading photos | you | Groq's free plan refuses most pages (D-043). Either type pages in (free), or put Groq on its Developer plan (about US$0.01 a page) and then finish the accuracy measurement: `python -m chama.pipeline extract-eval` (4 of 10 pages read so far) |
 | Real texted codes | you | Africa's Talking account with credit, then web_setup step 8; tried only against a fake so far |
 | Usability sessions with officials and members | you | [usability_test.md](usability_test.md) |
+| Kiswahili wording of the reasons (D-044) | you, with a fluent official | `services/reasons.py` (`TEMPLATES_SW`, `MISSING_SW`) and the band meanings in `early_warning.py`; reword there, then run `pytest tests/test_web_reasons.py` |
+| The first real meeting text (D-045) | you | Africa's Talking credit, then `meeting-texts --send-test`; tell the officials it is coming, and ask if they want it |
 | Chama A test of the model | chama A's officials | needs their answers and more pages (D-029) |
 | Grace Kanja's page 149 balance (23,000 or 230,000) | you, from the paper ledger | check before accepting page 149 |
 | The laptop's `chama` database | you, when convenient | holds leftovers of the old Tumaini copy (scans to page 151). To rebuild it: `docker exec chama-postgres dropdb -U chama --force chama`, `docker exec chama-postgres createdb -U chama chama`, then `python -m chama.pipeline all`, `score`, and re-add accounts. `kibaba_release` is not touched |

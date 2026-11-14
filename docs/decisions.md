@@ -927,3 +927,70 @@ format to fit 1,000 tokens (a change to the reading itself, with new accuracy to
 measure, too late before the release; future work).
 **Consequences.** On the free plan, officials enter pages by typing; photos are read
 once the Groq account is on the Developer plan. Typing needs no outside service at all.
+
+## D-044 The reasons can be read in Kiswahili, from templates of their own
+**Context.** The usability sessions read the tasks in English or Kiswahili, as each
+participant prefers, but every reason, band meaning and note on the pages was in
+English. Many officials read Kiswahili more easily, and a reason is only useful if the
+official can repeat it to the member.
+**Decision.** Every reason sentence has a Kiswahili template beside the English one in
+`services/reasons.py`, filled with the same values, so the same record always gives
+the same words; no translation model is used. Scoring saves both (`sentence` and
+`sentence_sw` in `app.risk_scores.reasons`). Each account has a language (`en` or
+`sw`, `app.users.language`), switched with English / Kiswahili on the Overview's
+"Members to talk to" and on a member's reasons (`PUT /api/me/language`). It changes the
+reasons, the "more / less likely" words, the band's meaning and the note under it, and
+the meeting text (D-045). A score saved before this has no Kiswahili, so its sentence
+is written from the member's row of `analytics.member_months` at that meeting, the
+values it was scored on. Kiswahili avoids the same words as English (no "kataa",
+"idhinisha", "mdaiwa sugu", "alama ya mkopo", "asilimia"), checked by a test.
+**Rejected.** Translating the whole interface now (navigation, records, scanning:
+too much before the defence; the band names stay English, explained in Kiswahili by
+their meaning); a machine translation (wording that can change between visits, and a
+member's record sent to another service).
+**Consequences.** The Kiswahili wording is Alvin's to check with a fluent official
+before the usability sessions (open decision 4, like the English). Shares of meetings
+and loans are written out whole with their nouns (both m-mi class) to keep the
+agreement right; a new reason needs both templates, or a test fails.
+
+## D-045 Officials get a text the day before each meeting, with counts only
+**Context.** Kibaba only helps if an official opens it before the meeting. Officials
+already get texts through Africa's Talking (D-042), at well under a shilling each.
+**Decision.** The worker checks once a minute whether tomorrow is a chama's meeting
+day and it is past `MEETING_TEXT_HOUR` (9:00 Nairobi time by default); then each
+active official with a phone gets one text in their language (D-044): how many members
+to follow up now and to keep an eye on, where the records stop if last month's page is
+not in yet, and the site's address. The meeting day is `meets` in
+`config/pipeline.yaml`: "first sunday" for Humble Sister, on 69 of the 84 meetings
+with a written date (the "next meeting" cell is filled on 8 pages only). Each
+(chama, meeting, official) is written to `app.meeting_texts` before the text is sent,
+so a restarted worker never sends it twice; a refused text is recorded with Africa's
+Talking's answer and not tried again. Off unless `MEETING_TEXTS=true`.
+`python -m chama.pipeline meeting-texts` shows the next meeting, who gets the text and
+what it says; `--send-test` sends it now without recording it.
+**Rejected.** Members' names in the text (it can be read on a locked phone and passes
+through Africa's Talking; who and why stay behind the sign-in); a cron job outside the
+worker (one more thing to keep running on the laptop and the Space).
+**Consequences.** With the address, a text runs to about 200 characters, so it goes as
+two joined texts a month for each official, each well under a shilling. Switch it on in one copy of the
+site only, or officials get it twice. The officials should hear about it at the
+usability session and may ask to stop it; there is no opt-out on the page yet.
+
+## D-046 A name the official retypes teaches Kibaba the model's misreading
+**Context.** On the review page, a name the model read is matched to a member; after
+Accept the matched spelling is saved (pipeline step `names`), so the next page with it
+is matched by itself. But an official who corrects a misread name by typing over the
+cell leaves only the corrected name: the model's misreading was lost, and the same
+misreading had to be fixed again next month.
+**Decision.** After Accept, the `names` step also reads the edit record of a
+photographed page: for each line whose name was retyped, the first reading (what the
+model wrote) is saved as one of the member's spellings, in the review file and
+`private.member_aliases`, like a matched spelling. Only when the corrected name is a
+member's, the reading is nobody's known spelling, and it looks like that member's name
+(at least 0.6, the alias review's "similar" score): a line the model gave another
+member's name, or a total read into the name column, teaches nothing. A reading
+corrected to two different members on one page is left out. Typed pages teach nothing.
+**Consequences.** Each chama's misreadings build up as its pages are accepted, so the
+review page asks less of its officials over time, with the same review behind every
+spelling: an official made each correction, and the review page still shows each
+match ("known spelling") before Accept.

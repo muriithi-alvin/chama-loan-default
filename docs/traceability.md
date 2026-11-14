@@ -5,7 +5,7 @@ and the tests that check them. Requirement IDs (G1, OFF-3, X10 and so on) are
 the ones in `docs/m4_master_prompt.md`; scenarios T1 to T10 and their manual
 checks are in [m4_test_record.md](m4_test_record.md). Automated tests are in
 `tests/` and the dbt tests in `transform/`. All run on every push (GitHub
-Actions): 337 tests on 12 Nov 2026 (336 pass and 1 is skipped on Windows, where
+Actions): 383 tests on 12 Nov 2026 (382 pass and 1 is skipped on Windows, where
 symbolic links need extra rights; it runs on GitHub's Linux).
 
 **Status:** Done; Partly (met with a stated gap); Cut (dropped after the
@@ -106,6 +106,9 @@ The coordinator's and officials' requests at the presentation, numbered P.
 | P-8 | From photo to results without the menu | `FlowSteps`, scan status and run pages (D-040) | — (pages) | T15 | Done |
 | P-9 | Several chamas: each with its own name; the release serves those marked for it | `release: true`, `hosting: agreed` in `config/pipeline.yaml` | `test_the_release_serves_the_chamas_marked_for_it`, `test_real_names_go_to_hugging_face_only_when_the_hosting_is_agreed` | — | Partly: one email or phone still opens one chama |
 | P-10 | A live site that keeps its records | Hugging Face Space on PRO, private bucket (D-041) | `test_release_storage.py` (8), `test_the_space_keeps_its_records_in_a_private_bucket_at_data`, `test_a_bucket_that_is_not_private_is_not_attached` | — | Partly: the first publish is the user's, on 12 Nov |
+| P-11 | Reasons in Kiswahili, chosen per account | `services/reasons.py` (`TEMPLATES_SW`), `early_warning.shown_reasons`, `PUT /api/me/language`, `LanguageSwitch` (D-044) | `test_every_feature_of_the_model_has_a_kiswahili_template`, `test_kiswahili_sentences_are_plain_and_never_use_forbidden_words`, `test_kiswahili_sentences_use_the_members_own_values`, `test_the_pages_show_the_officials_language_and_write_kiswahili_for_old_scores`, `test_the_language_of_the_reasons_is_saved_on_the_account` | T17 | Partly: the Kiswahili wording is to be checked by a fluent official |
+| P-12 | A text to officials the day before each meeting, counts only | `services/meeting_texts.py`, the worker, `app.meeting_texts`, `meets` in `config/pipeline.yaml` (D-045) | `test_meeting_texts.py` (12): the meeting day, due only the day before from the hour, English and Kiswahili, once per official, a refusal recorded, no names | T18 | Partly: tried against a fake; the first real text needs Africa's Talking credit |
+| P-13 | A name the official retyped is matched by itself next time | `pipeline_run.corrected_readings`, `retyped_names`, `save_names` (D-046) | `test_learned_names.py` (6): kept only for a like reading, never from another member's name, a clash left out, matched on the next page | T19 | Done |
 
 ## 3. Sprint III course criteria
 

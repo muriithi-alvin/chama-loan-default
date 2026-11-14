@@ -124,6 +124,12 @@ cd ..
       **Logs > Auth**.
    5. A sender name such as `KIBABA`, instead of Africa's Talking's default, can be
       requested in their dashboard; put it in `AFRICASTALKING_SENDER_ID` once approved.
+   6. **The text before each meeting (D-045)** uses the same app and needs no hook.
+      Check it with `python -m chama.pipeline meeting-texts` (who gets it and what it
+      says) and `--send-test`. Then set `MEETING_TEXTS=true` in `.env` (and run
+      `deploy-publish` for the Space) in one copy of the site only, and restart the
+      worker; its log says `meeting texts on`. The meeting day is `meets` in
+      `config/pipeline.yaml`.
 
 Officials without a phone cannot finish signing in. For development on this
 laptop only, `TWO_STEP_FOR_OFFICIALS=false` in `.env` turns the second step off.
