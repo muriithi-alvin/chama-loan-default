@@ -389,6 +389,9 @@ def publish(ref: str = "main", rebuild: bool = False, api=None, bundle: Path | N
                      "AFRICASTALKING_SENDER_ID"):
         if os.getenv(optional, "").strip():
             secrets[optional] = os.environ[optional].strip()
+    for optional in ("MEETING_TEXTS", "MEETING_TEXT_HOUR"):   # the officials' text before each meeting (D-045)
+        if os.getenv(optional, "").strip():
+            variables[optional] = os.environ[optional].strip()
     for key, value in variables.items():
         api.add_space_variable(space, key, value)
     for key, value in secrets.items():

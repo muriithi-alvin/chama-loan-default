@@ -56,9 +56,24 @@ class SmsSettings:
     api_key: str              # AFRICASTALKING_API_KEY
     sender_id: str = ""       # AFRICASTALKING_SENDER_ID, once Africa's Talking has approved one
 
+    @classmethod
+    def from_env(cls) -> SmsSettings:
+        """From .env (or the Space's secrets)."""
+        import os
+
+        return cls(hook_secret=os.getenv("SMS_HOOK_SECRET", "").strip(),
+                   username=os.getenv("AFRICASTALKING_USERNAME", "").strip(),
+                   api_key=os.getenv("AFRICASTALKING_API_KEY", "").strip(),
+                   sender_id=os.getenv("AFRICASTALKING_SENDER_ID", "").strip())
+
     @property
     def ready(self) -> bool:
         return bool(self.hook_secret and self.username and self.api_key)
+
+    @property
+    def can_text(self) -> bool:
+        """Enough to send a text of Kibaba's own, such as the meeting text (D-045)."""
+        return bool(self.username and self.api_key)
 
     @property
     def url(self) -> str:
@@ -110,7 +125,13 @@ def phone_and_code(payload: dict) -> tuple[str, str]:
 
 def send(settings: SmsSettings, phone: str, code: str, client: httpx.Client | None = None) -> dict:
     """Text the code; Africa's Talking's answer for the one recipient."""
-    form = {"username": settings.username, "to": phone, "message": MESSAGE.format(code=code), "bulkSMSMode": "1"}
+    return send_text(settings, phone, MESSAGE.format(code=code), client)
+
+
+def send_text(settings: SmsSettings, phone: str, message: str, client: httpx.Client | None = None) -> dict:
+    """Text one message to one number; Africa's Talking's answer for it. Raises
+    HookRefused when nothing was sent."""
+    form = {"username": settings.username, "to": phone, "message": message, "bulkSMSMode": "1"}
     if settings.sender_id:
         form["from"] = settings.sender_id
     try:

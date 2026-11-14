@@ -584,6 +584,51 @@ def web_user_codes(chama_id: str) -> None:
     _run(lambda: print("\n".join(member_code_list(get_engine(), chama_id))))
 
 
+@cli.command("meeting-texts")
+@click.option("--send-test", is_flag=True,
+              help="Text each official the next meeting's message now, as a test. It is not recorded, so the "
+                   "real text still goes the day before.")
+def meeting_texts_command(send_test: bool) -> None:
+    """The text officials get the day before each meeting (D-045): when it goes,
+    to whom and what it says. Sends nothing unless --send-test."""
+    from datetime import datetime
+
+    from chama.web.data import users
+    from chama.web.services import meeting_texts as texts
+    from chama.web.services.sms_hook import HookRefused, SmsSettings, send_text
+    from chama.web.settings import chamas
+
+    def go() -> None:
+        from chama.db import create_schemas
+
+        engine = get_engine()
+        create_schemas(engine)
+        today = datetime.now(texts.NAIROBI).date()
+        print("\n".join(texts.preview(engine, today)))
+        if not send_test:
+            return
+        sms = SmsSettings.from_env()
+        if not sms.can_text:
+            raise StepFailed("Add AFRICASTALKING_USERNAME and AFRICASTALKING_API_KEY to .env first.")
+        for chama_id, chama in chamas().items():
+            if not chama.get("meets"):
+                continue
+            meeting = texts.next_meeting(chama["meets"], today)
+            with engine.begin() as conn:
+                officials = users.officials_with_phones(conn, chama_id)
+                counts = texts.counts_for(conn, chama_id)
+            for official in officials:
+                words = texts.message(official.language, meeting, counts, texts.site_address())
+                try:
+                    answer = send_text(sms, official.phone, words)
+                    print(f"[{chama_id}] test sent to the number ending {official.phone[-3:]}: "
+                          f"{answer.get('status')}, {answer.get('cost', 'cost not given')}")
+                except HookRefused as e:
+                    print(f"[{chama_id}] not sent to the number ending {official.phone[-3:]}: {e.message}")
+
+    _run(go)
+
+
 @cli.command("web-stats")
 @click.option("--last", type=int, help="Only the last N requests.")
 def web_stats(last: int | None) -> None:

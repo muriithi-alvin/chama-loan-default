@@ -10,7 +10,6 @@ answer is the shape Supabase expects: {} when sent, otherwise
 from __future__ import annotations
 
 import logging
-import os
 from typing import Annotated
 
 import httpx
@@ -28,12 +27,7 @@ log = logging.getLogger("chama.web")
 
 def sms_settings() -> sms_hook.SmsSettings:
     """From .env (or the Space's secrets); tests replace it."""
-    return sms_hook.SmsSettings(
-        hook_secret=os.getenv("SMS_HOOK_SECRET", "").strip(),
-        username=os.getenv("AFRICASTALKING_USERNAME", "").strip(),
-        api_key=os.getenv("AFRICASTALKING_API_KEY", "").strip(),
-        sender_id=os.getenv("AFRICASTALKING_SENDER_ID", "").strip(),
-    )
+    return sms_hook.SmsSettings.from_env()
 
 
 def sms_client() -> httpx.Client | None:

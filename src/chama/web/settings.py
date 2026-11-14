@@ -28,6 +28,8 @@ class WebSettings:
     log_dir: Path
     two_step_for_officials: bool = True   # officials confirm each sign-in with a texted code (D-037)
     phone_country: str = "254"            # for numbers written as 07..., 01... (Kenya)
+    meeting_texts: bool = False           # text officials the day before each meeting (D-045)
+    meeting_text_hour: int = 9            # from this hour, Nairobi time, on the day before
 
     @property
     def supabase_ready(self) -> bool:
@@ -53,6 +55,8 @@ def web_settings() -> WebSettings:
         log_dir=Path(os.getenv("WEB_LOG_DIR", "").strip() or PROJECT_ROOT / "data" / "logs"),
         two_step_for_officials=_flag("TWO_STEP_FOR_OFFICIALS", True),
         phone_country=os.getenv("PHONE_COUNTRY_CODE", "").strip().lstrip("+") or "254",
+        meeting_texts=_flag("MEETING_TEXTS", False),
+        meeting_text_hour=min(23, max(0, int(os.getenv("MEETING_TEXT_HOUR", "").strip() or "9"))),
     )
 
 
