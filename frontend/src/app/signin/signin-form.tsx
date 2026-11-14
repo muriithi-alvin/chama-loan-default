@@ -205,9 +205,11 @@ export function SignInForm({ ended, next, site, serverDown, step, error }: Props
             className="flex h-14 items-center justify-center gap-3 rounded-button border-[1.5px] border-field bg-white text-[17px] font-bold text-ink no-underline hover:bg-ice hover:text-ink">
             <GoogleMark /> Continue with Google
           </a>
-          <div className="flex items-center gap-3 text-[14px] text-muted" aria-hidden="true">
-            <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
-          </div>
+          {(methods.password || methods.phone) && (
+            <div className="flex items-center gap-3 text-[14px] text-muted" aria-hidden="true">
+              <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
+            </div>
+          )}
         </>
       )}
 
