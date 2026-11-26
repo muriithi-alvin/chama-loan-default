@@ -1,14 +1,14 @@
-# Milestone 4 test record (T1 to T16)
+# Milestone 4 test record (T1 to T19)
 
 T1 to T10 are the scenarios from section 10 of `docs/m4_master_prompt.md`; T11 to
-T16 cover what was added after the presentation (D-036 to D-043). Each has the
+T19 cover what was added after the presentation (D-036 to D-046). Each has the
 automated tests that cover it and a short manual check on the running site. Manual
 checks run on the laptop release (`serve-release --address https://preview.localhost`,
 then http://localhost:3000), which holds Humble Sister's copy to page 128 (D-036).
 Until 5 Nov they used the fictional demo chama (D-028).
 
 Automated tests run with `python -m pytest` and on every push (GitHub Actions). On
-12 Nov 2026: 337 tests, all passing, 1 skipped on Windows (symbolic links; it runs on
+12 Nov 2026: 383 tests, all passing, 1 skipped on Windows (symbolic links; it runs on
 GitHub's Linux).
 
 **12 Nov 2026:** the browser checks could not be run on the project laptop: with the
@@ -37,6 +37,9 @@ difference; To do = manual check still to run.
 | T14 | A meeting in two or three photos | yes | to do (needs Groq's paid plan, D-043) | Pass (automated) |
 | T15 | Each step opens the next, through to the results | — (pages) | to do | To do |
 | T16 | A real texted code through Africa's Talking | yes (14, fake service) | to do (needs an account with credit and a public address) | Pass (automated) |
+| T17 | Reasons in Kiswahili | yes (7) | to do | Pass (automated) |
+| T18 | The text the day before a meeting | yes (12, fake service) | to do (needs Africa's Talking credit) | Pass (automated) |
+| T19 | A retyped name is matched by itself on the next page | yes (6) | to do (needs two photographed pages, D-043) | Pass (automated) |
 
 ## T1 An official signs in: the overview appears in under 1 s
 
@@ -212,3 +215,40 @@ difference; To do = manual check still to run.
   with a number that is not a test number. With `sandbox`, the code appears in Africa's
   Talking's simulator; with a live app, on the phone. The API log shows
   `sms hook: code sent to the number ending ...`.
+
+## T17 Reasons in Kiswahili (D-044)
+
+- **Automated** (`test_web_reasons.py`, `test_web_auth.py`): every feature of the model
+  has a Kiswahili sentence, different from the English, filled with the member's values
+  and free of the forbidden words in both languages; missing values have their own
+  sentences; a score saved before Kiswahili is written from the member's record; the
+  language is saved on the account only with the session's CSRF token.
+- **Manual check (to do):** sign in as the treasurer, choose Kiswahili on the Overview's
+  "Members to talk to": each reason and its "uwezekano" words change; open a member: the
+  reasons, the band's meaning and the note are in Kiswahili and the switch shows
+  Kiswahili. Sign out and in again: still Kiswahili. A fluent official reads the
+  sentences and marks any to reword.
+
+## T18 The text the day before a meeting (D-045)
+
+- **Automated** (`test_meeting_texts.py`, fake Africa's Talking): the meeting day from
+  `meets`; due only the day before, from the hour, in Nairobi time; English and
+  Kiswahili, singular and plural; where old records stop; only officials with a phone;
+  sent once even when the worker runs again; a refusal recorded and not repeated; no
+  member's name or code.
+- **Manual check (to do):** with Africa's Talking set up, run
+  `python -m chama.pipeline meeting-texts` (the next meeting, who, the words), then
+  `--send-test`: the treasurer's phone (or the sandbox simulator) gets the text. Then
+  set `MEETING_TEXTS=true` in one copy of the site and check the worker's log on the
+  day before the meeting: `meeting text for chama_demo on ...: sent`.
+
+## T19 A retyped name is matched by itself on the next page (D-046)
+
+- **Automated** (`test_learned_names.py`): a misreading retyped to a member's name is
+  kept for that member; nothing is learned from a line the model gave another member's
+  name, a total in the name column, an unchanged or empty cell, or a reading corrected to
+  two members; the first reading comes from the edit record, leaving out deleted and
+  hand-added lines; a learned misreading is matched on the next page.
+- **Manual check (to do, needs photos read: D-043):** on a scanned page, type over a
+  misread name with the member's name and Accept. On a later page where the model reads
+  the same misspelling, the name list shows it matched, "(known spelling)".

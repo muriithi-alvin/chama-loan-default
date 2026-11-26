@@ -3,10 +3,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { BandKey } from "@/components/band-key";
-import { BAND, BandChip, Bead, BeadArc, EFFECT_TEXT, EffectIcon } from "@/components/beads";
+import { BAND, BandChip, Bead, BeadArc, EFFECT_WORDS, EffectIcon } from "@/components/beads";
 import { CountUp } from "@/components/count-up";
 import { Cooking } from "@/components/figurines";
 import { InstallHint } from "@/components/install-hint";
+import { LanguageSwitch } from "@/components/language-switch";
 import { Card, PageBody, PageHeader } from "@/components/page-header";
 import { ago, meetingWhen, money } from "@/lib/format";
 import { apiGet } from "@/lib/server-api";
@@ -95,7 +96,10 @@ export default async function OverviewPage() {
           <Card aria-labelledby="ov-follow">
             <div className="mb-2 flex flex-wrap items-baseline justify-between gap-3">
               <h2 id="ov-follow" className="text-[24px] sm:text-[26px]">Members to talk to</h2>
-              <Link href="/o/members" className="text-[15px] font-bold">All members</Link>
+              <span className="flex flex-wrap items-center gap-3">
+                <LanguageSwitch language={data.language} />
+                <Link href="/o/members" className="text-[15px] font-bold">All members</Link>
+              </span>
             </div>
             {data.follow_up.length ? (
               <ul>
@@ -109,10 +113,10 @@ export default async function OverviewPage() {
                       <span className="text-[17px] font-bold">{m.name}</span>
                       <span className="flex items-start gap-2 text-[15px] text-subtle">
                         <EffectIcon effect={m.reason.effect} size={16} />
-                        <span>
+                        <span lang={data.language}>
                           {m.reason.sentence}:{" "}
                           <span className={`font-bold ${m.reason.effect === "raises risk" ? "text-high" : "text-low"}`}>
-                            {EFFECT_TEXT[m.reason.effect]}
+                            {EFFECT_WORDS[data.language].short[m.reason.effect]}
                           </span>
                         </span>
                       </span>

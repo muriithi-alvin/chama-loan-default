@@ -14,6 +14,9 @@ In the cloud release (BACKUP_DIR set) it also saves the database to the
 storage bucket when it has changed and right after each records update
 (release_storage.py, D-041).
 
+With MEETING_TEXTS=true it checks once a minute, between jobs, whether the
+day-before-the-meeting text is due for any chama (meeting_texts.py, D-045).
+
 It loads the chosen model once at start, and tells the health check it is
 alive every 10 seconds. Logs hold upload and member codes, never names.
 """
@@ -140,6 +143,45 @@ def run_pipeline(engine, config: dict, job: dict, model, saver=None) -> None:
         saver.save_now()          # the new page's records are the ones most worth keeping
 
 
+class MeetingTexts:
+    """The day-before-the-meeting texts (D-045), checked at most once a minute."""
+
+    EVERY_S = 60
+
+    def __init__(self, engine, on: bool, hour: int, sms):
+        self.engine, self.on, self.hour, self.sms = engine, on, hour, sms
+        self.next_check = 0.0
+
+    @classmethod
+    def start(cls, engine=None) -> MeetingTexts:
+        from chama.web.services.sms_hook import SmsSettings
+        from chama.web.settings import web_settings
+
+        settings, sms = web_settings(), SmsSettings.from_env()
+        on = settings.meeting_texts and sms.can_text
+        if settings.meeting_texts and not sms.can_text:
+            log.warning("MEETING_TEXTS is on but Africa's Talking is not set up (AFRICASTALKING_USERNAME, "
+                        "AFRICASTALKING_API_KEY): no meeting texts will be sent")
+        elif on:
+            log.info("meeting texts on: officials are texted from %s:00 Nairobi time the day before a meeting",
+                     settings.meeting_text_hour)
+        return cls(engine or web_engine(), on, settings.meeting_text_hour, sms)
+
+    def check(self, now: float | None = None) -> None:
+        from datetime import datetime
+
+        from chama.web.services import meeting_texts
+
+        clock = time.monotonic() if now is None else now
+        if not self.on or clock < self.next_check:
+            return
+        self.next_check = clock + self.EVERY_S
+        try:
+            meeting_texts.send_due(self.engine, datetime.now(meeting_texts.NAIROBI), self.sms, self.hour)
+        except Exception as e:  # noqa: BLE001 - a text must never stop the worker
+            log.error("meeting texts: stopped unexpectedly (%s); trying again in a minute", type(e).__name__)
+
+
 class Heartbeat(threading.Thread):
     def __init__(self, engine, name: str):
         super().__init__(daemon=True)
@@ -189,8 +231,11 @@ def main() -> None:
     if released:
         log.info("queued %s jobs again that a stopped worker left running", released)
 
+    texts = MeetingTexts.start(engine)
+
     try:
         while True:
+            texts.check()
             with engine.begin() as conn:
                 job = scans.claim_job(conn)
             if job is None:

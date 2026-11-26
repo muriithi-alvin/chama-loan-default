@@ -64,6 +64,18 @@ export const BAND = {
 /** What a reason does to the chance of a missed repayment, in plain words. */
 export const EFFECT_TEXT = { "raises risk": "more likely to miss", "lowers risk": "less likely to miss" } as const;
 
+/** The same, in English and Kiswahili (D-044): short for lists, long for a member's page. */
+export const EFFECT_WORDS = {
+  en: {
+    short: EFFECT_TEXT,
+    long: { "raises risk": "Makes a missed repayment more likely", "lowers risk": "Makes a missed repayment less likely" },
+  },
+  sw: {
+    short: { "raises risk": "uwezekano zaidi wa kukosa", "lowers risk": "uwezekano mdogo wa kukosa" },
+    long: { "raises risk": "Huongeza uwezekano wa kukosa marejesho", "lowers risk": "Hupunguza uwezekano wa kukosa marejesho" },
+  },
+} as const;
+
 /** A band label: bead count, word and colour, so it never relies on colour alone. */
 export function BandChip({ band, size = "md" }: { band: Band; size?: "sm" | "md" | "lg" }) {
   const b = BAND[band];

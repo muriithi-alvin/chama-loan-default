@@ -299,3 +299,19 @@ def test_a_typed_page_opens_with_the_last_meetings_members_and_balances(engine):
     meeting = next(r["cells"] for r in draft["rows"] if r["table"] == "meetings")
     assert meeting["meeting_date"] == "3/5/2026"
     assert all(n["member"] for n in draft["names"])          # the agreed names match at once
+
+
+def test_a_restarted_worker_is_not_ready_until_its_model_loads(engine, monkeypatch):
+    from chama.web.data import scans as data
+    from chama.web.routes import health
+
+    monkeypatch.setattr(health, "engine", lambda: engine)
+    with engine.begin() as conn:
+        data.heartbeat(conn, "worker@test", "fc6ae3fed3a1", True)        # the last run, loaded
+        data.heartbeat(conn, "worker@test", None, False)                 # restarted, still loading
+    ready, parts = health.health_report()
+    assert not ready and parts["model"] == "not loaded" and parts["worker"] == "ready"
+    with engine.begin() as conn:
+        data.heartbeat(conn, "worker@test", "fc6ae3fed3a1", True)
+    ready, parts = health.health_report()
+    assert ready and parts["model"] == "ready (run fc6ae3fe)"

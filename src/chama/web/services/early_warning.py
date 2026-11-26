@@ -13,6 +13,7 @@ from sqlalchemy.engine import Connection
 
 from chama.web.data import records
 from chama.web.services.names import display_name, member_names
+from chama.web.services.reasons import sentence
 from chama.web.settings import chama_name
 
 BAND_ORDER = {"high": 0, "medium": 1, "low": 2}
@@ -27,6 +28,36 @@ BAND_MEANING = {
     "low": "Less likely to miss a repayment in the next 3 meetings.",
 }
 FOLLOW_UP_NOTE = "This is a prompt to follow up, not a decision."
+
+# The same in Kiswahili, for an official who reads the reasons in Kiswahili (D-044).
+BAND_MEANING_SW = {
+    "high": "Ana uwezekano mkubwa kuliko wengine wa kukosa kulipa marejesho katika mikutano 3 ijayo. "
+            "Ongea naye kwanza.",
+    "medium": "Anaweza kukosa kulipa marejesho katika mikutano 3 ijayo. Mjulie hali unapopata nafasi.",
+    "low": "Ana uwezekano mdogo wa kukosa kulipa marejesho katika mikutano 3 ijayo.",
+}
+FOLLOW_UP_NOTE_SW = "Huu ni ukumbusho wa kufuatilia, si uamuzi."
+
+
+def _values_for_kiswahili(conn: Connection, chama_id: str, scores: list[dict], lang: str) -> dict[str, dict]:
+    """Members' records at the scored meeting, only when a score saved before
+    Kiswahili was added has no Kiswahili sentences (D-044)."""
+    if lang != "sw" or not scores or all(r.get("sentence_sw") for s in scores for r in s["reasons"]):
+        return {}
+    return records.member_features_at(conn, chama_id, scores[0]["page_no"])
+
+
+def shown_reasons(reasons: list[dict], lang: str, values: dict | None = None) -> list[dict]:
+    """Each reason with its sentence in the official's language. A score saved
+    before D-044 has no Kiswahili, so it is written from `values`, the member's
+    record at that meeting; without them the English sentence is shown."""
+    out = []
+    for r in reasons:
+        words = r["sentence"]
+        if lang == "sw":
+            words = r.get("sentence_sw") or (sentence(r["feature"], values, "sw") if values else words)
+        out.append({"feature": r["feature"], "sentence": words, "effect": r["effect"]})
+    return out
 
 
 def model_label(model_name: str, run_id: str) -> str:
@@ -62,11 +93,12 @@ def current_scores(conn: Connection, chama_id: str) -> tuple[list[dict], dict | 
     return scores, (_source(newest) if newest else None)
 
 
-def overview(conn: Connection, chama_id: str) -> dict:
+def overview(conn: Connection, chama_id: str, lang: str = "en") -> dict:
     names = member_names(conn, chama_id)
     last = records.latest_meeting(conn, chama_id)
     scores, source = current_scores(conn, chama_id)
     before = records.previous_bands(conn, chama_id, source["page_no"]) if source else {}
+    values = _values_for_kiswahili(conn, chama_id, [s for s in scores if s["band"] in ("high", "medium")], lang)
 
     scores.sort(key=lambda s: (BAND_ORDER[s["band"]], display_name(names, s["member_code"])))
     strand = [{
@@ -76,12 +108,17 @@ def overview(conn: Connection, chama_id: str) -> dict:
         "moved_from": before.get(s["member_code"]) if before.get(s["member_code"], s["band"]) != s["band"]
         else None,
     } for s in scores]
-    follow_up = [{
-        "code": s["member_code"],
-        "name": display_name(names, s["member_code"]),
-        "band": s["band"],
-        "reason": next((r for r in s["reasons"] if r["effect"] == "raises risk"), s["reasons"][0]),
-    } for s in scores if s["band"] in ("high", "medium")]
+    follow_up = []
+    for s in scores:
+        if s["band"] not in ("high", "medium"):
+            continue
+        reasons = shown_reasons(s["reasons"], lang, values.get(s["member_code"]))
+        follow_up.append({
+            "code": s["member_code"],
+            "name": display_name(names, s["member_code"]),
+            "band": s["band"],
+            "reason": next((r for r in reasons if r["effect"] == "raises risk"), reasons[0]),
+        })
 
     loans = records.running_loans(conn, chama_id)
     missed = records.missed_at_meeting(conn, chama_id, last["page_no"]) if last else {"running": 0, "missed": 0}
@@ -89,6 +126,7 @@ def overview(conn: Connection, chama_id: str) -> dict:
     counts["no_loan"] = max(0, len(names) - len(scores))
     return {
         "chama": {"id": chama_id, "name": chama_name(chama_id)},
+        "language": lang,
         "last_meeting": _meeting(last),
         "scores": source,
         "scores_behind": bool(source and last and last["page_no"] > source["page_no"]),
@@ -136,20 +174,23 @@ def _num(value) -> float | None:
     return None if value is None else float(value)
 
 
-def member_page(conn: Connection, chama_id: str, code: str) -> dict:
+def member_page(conn: Connection, chama_id: str, code: str, lang: str = "en") -> dict:
     names = member_names(conn, chama_id)
     scores, source = current_scores(conn, chama_id)
     score = next((s for s in scores if s["member_code"] == code), None)
     first: date | None = records.member_first_month(conn, chama_id, code)
     loans = records.member_loans(conn, chama_id, code)
+    meanings, note = (BAND_MEANING_SW, FOLLOW_UP_NOTE_SW) if lang == "sw" else (BAND_MEANING, FOLLOW_UP_NOTE)
+    values = _values_for_kiswahili(conn, chama_id, [score] if score else [], lang)
     return {
         "code": code,
         "name": display_name(names, code),
+        "language": lang,
         "member_since": first.year if first else None,
         "band": score["band"] if score else None,
-        "meaning": BAND_MEANING[score["band"]] if score else None,
-        "note": FOLLOW_UP_NOTE,
-        "reasons": score["reasons"] if score else [],
+        "meaning": meanings[score["band"]] if score else None,
+        "note": note,
+        "reasons": shown_reasons(score["reasons"], lang, values.get(code)) if score else [],
         "source": _source(score) if score else source,
         "loans": [{
             "type": l["loan_type"],

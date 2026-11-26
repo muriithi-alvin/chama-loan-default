@@ -193,7 +193,9 @@ def heartbeat(conn: Connection, worker: str, model_run_id: str | None, loaded: b
         INSERT INTO app.worker_status (worker, model_run_id, model_loaded_at, last_seen_at)
         VALUES (:w, :r, CASE WHEN :l THEN now() END, now())
         ON CONFLICT (worker) DO UPDATE SET last_seen_at = now(), model_run_id = EXCLUDED.model_run_id,
-            model_loaded_at = coalesce(app.worker_status.model_loaded_at, EXCLUDED.model_loaded_at)
+            -- a restarted worker (or a restored database) must not keep the last run's "loaded" time
+            model_loaded_at = CASE WHEN EXCLUDED.model_run_id IS NULL THEN NULL
+                                   ELSE coalesce(app.worker_status.model_loaded_at, EXCLUDED.model_loaded_at) END
     """), {"w": worker, "r": model_run_id, "l": loaded})
 
 

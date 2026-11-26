@@ -9,7 +9,9 @@
   The chama's raw tables are reloaded with the existing loader.
 - names: each spelling the official matched is added to the chama's reviewed
   names (the review file and private.member_aliases), the same record the
-  alias review keeps; the step stops if any spelling is still unmatched.
+  alias review keeps; the step stops if any spelling is still unmatched. So
+  is each name the model misread that the official corrected by retyping the
+  cell (D-046): the next page with the same misreading is matched by itself.
 - anonymise, checks: the existing steps (names to codes; dbt models and tests,
   then the quality report).
 - score: bands and reasons for the chama's latest meeting (scoring.py).
@@ -78,8 +80,53 @@ def new_canonical(raw: str) -> str:
     return " ".join(w.capitalize() for w in normalise_name(raw).split())
 
 
+def corrected_readings(retyped: list[tuple[str | None, str | None]], members_of: dict[str, str],
+                       known: set[str]) -> dict[str, str]:
+    """{misreading: member} from names the official retyped on a photographed page (D-046).
+
+    retyped: for each line whose name cell was edited, (the cell as the model
+        read it, the cell now).
+    members_of: normalised spelling -> member, for the page's matches and the
+        chama's reviewed and agreed names.
+    known: spellings that are already somebody's.
+
+    A reading is kept only when the corrected name is a member's, the reading is
+    nobody's known spelling, and it looks like that member's name (at least
+    aliases.SIMILAR_THRESHOLD): a line the model gave another member's name, or
+    a total read into the name column, teaches nothing. A reading corrected to
+    two different members on one page is left out.
+    """
+    learned: dict[str, str] = {}
+    clashes: set[str] = set()
+    for reading, now in retyped:
+        raw, final = normalise_name(reading or ""), normalise_name(now or "")
+        member = members_of.get(final)
+        if not raw or not member or raw == final or raw in known:
+            continue
+        if aliases.name_similarity(raw, member) < aliases.SIMILAR_THRESHOLD:
+            continue
+        if learned.get(raw, member) != member:
+            clashes.add(raw)
+        learned[raw] = member
+    return {raw: member for raw, member in learned.items() if raw not in clashes}
+
+
+def retyped_names(conn, upload_id: int) -> list[tuple[str | None, str | None]]:
+    """(first reading, name now) for each line read from the photo whose name the
+    official edited, from the edit record. Lines deleted or added by hand are left out."""
+    rows = conn.execute(text("""
+        SELECT DISTINCT ON (e.row_id) e.old_value AS reading, r.cells->>'member_name' AS now
+        FROM private.row_edits e JOIN private.draft_rows r ON r.id = e.row_id
+        WHERE e.upload_id = :u AND e.action = 'edit' AND e.col = 'member_name'
+          AND r.tbl IN ('statements', 'new_loans') AND NOT r.deleted AND NOT r.added
+        ORDER BY e.row_id, e.edited_at, e.id
+    """), {"u": upload_id})
+    return [(r.reading, r.now) for r in rows]
+
+
 def save_names(engine, conn, upload: dict) -> int:
-    """Add the page's matched spellings to the chama's reviewed names."""
+    """Add the page's matched spellings, and the misreadings the official
+    corrected (D-046), to the chama's reviewed names."""
     chama_id = upload["chama_id"]
     matches = scans.name_matches(conn, upload["id"])
     unmatched = [m["raw_name"] for m in matches if not m["canonical_name"] and not m["is_new"]]
@@ -89,6 +136,10 @@ def save_names(engine, conn, upload: dict) -> int:
              for m in matches}
     saved = aliases.saved_aliases(engine, chama_id).get(chama_id, {})
     added = {raw: name for raw, name in found.items() if raw not in saved}
+    if upload.get("source", "photo") == "photo":
+        agreed = {normalise_name(name): name for name in {*saved.values(), *found.values()}}
+        members_of = {**agreed, **saved, **found}
+        added.update(corrected_readings(retyped_names(conn, upload["id"]), members_of, set(members_of)))
     if not added:
         return 0
     path = aliases.review_file(chama_id)

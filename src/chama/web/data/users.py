@@ -19,8 +19,9 @@ class User:
     position: str | None
     active: bool
     identity_id: str | None = None
-    phone: str | None = None              # +2547...: phone sign-in and officials' second step (D-037)
+    phone: str | None = None              # Optional account contact and meeting reminders.
     phone_identity_id: str | None = None
+    language: str = "en"                  # en or sw: the early-warning words and the meeting text (D-044)
 
     @property
     def is_official(self) -> bool:
@@ -28,7 +29,7 @@ class User:
 
 
 _COLUMNS = ("id, email, role, chama_id, member_code, display_name, position, active, identity_id, phone, "
-            "phone_identity_id")
+            "phone_identity_id, language")
 
 
 def _user(row) -> User | None:
@@ -74,6 +75,17 @@ def reopen(conn: Connection, user_id: int, role: str, chama_id: str, member_code
              "position = :p, phone = coalesce(:t, phone), active = true WHERE id = :i"),
         {"r": role, "c": chama_id, "m": member_code, "n": display_name, "p": position, "t": phone, "i": user_id},
     )
+
+
+def set_language(conn: Connection, user_id: int, language: str) -> None:
+    conn.execute(text("UPDATE app.users SET language = :l WHERE id = :i"), {"l": language, "i": user_id})
+
+
+def officials_with_phones(conn: Connection, chama_id: str) -> list[User]:
+    """The chama's active officials who have a phone, for the meeting text (D-045)."""
+    rows = conn.execute(text(f"SELECT {_COLUMNS} FROM app.users WHERE chama_id = :c AND role = 'official' "
+                             "AND active AND phone IS NOT NULL ORDER BY id"), {"c": chama_id})
+    return [_user(r) for r in rows]
 
 
 def set_active(conn: Connection, user_id: int, active: bool) -> None:

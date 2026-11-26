@@ -1,3 +1,4 @@
+
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -11,60 +12,111 @@ import { SignInForm } from "./signin-form";
 
 export const metadata: Metadata = { title: "Sign in" };
 
-type Search = Promise<{ ended?: string; next?: string; step?: string; error?: string }>;
+type Search = Promise<{ ended?: string; next?: string; error?: string }>;
 
 function safeNext(next: string | undefined): string | undefined {
-  // only a page on this site, never another address
+  // Only allow a page on this site, never another address.
   return next && /^\/(o|m)(\/|$)/.test(next) ? next : undefined;
 }
 
-export default async function SignInPage({ searchParams }: { searchParams: Search }) {
-  const { ended, next, step, error } = await searchParams;
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Search;
+}) {
+  const { ended, next, error } = await searchParams;
+
   const [me, site] = await Promise.all([
     apiGetOptional<Me>("/api/me"),
     apiGetOptional<Site>("/api/site"),
   ]);
-  if (me) redirect(me.user.role === "member" ? "/m" : "/o");
+
+  if (me) {
+    redirect(me.user.role === "member" ? "/m" : "/o");
+  }
 
   return (
     <div className="flex min-h-dvh flex-col">
       <div className="flex flex-1 flex-wrap">
-        <section aria-label="Bead collar"
-          className="relative flex min-h-[560px] min-w-0 flex-[1_1_640px] flex-col items-center overflow-hidden bg-cream px-6 pt-9 lg:min-h-[860px]">
+        <section
+          aria-label="Bead collar"
+          className="relative flex min-h-[560px] min-w-0 flex-[1_1_640px] flex-col items-center overflow-hidden bg-cream px-6 pt-9 lg:min-h-[860px]"
+        >
           <BeadCollar className="max-w-[min(580px,88vw)]" />
-          <p className="mt-3.5 text-[15px] text-muted">Move through the beads. Tap to send a ripple.</p>
-          <div aria-hidden="true" className="pointer-events-none absolute bottom-0 left-1/2 flex w-[940px] max-w-[120%] -translate-x-1/2 items-end justify-center gap-6 opacity-90">
+          <p className="mt-3.5 text-[15px] text-muted">
+            Move through the beads. Tap to send a ripple.
+          </p>
+
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute bottom-0 left-1/2 flex w-[940px] max-w-[120%] -translate-x-1/2 items-end justify-center gap-6 opacity-90"
+          >
             <Cooking className="hidden h-[220px] sm:block" />
             <Singing className="h-[200px] sm:h-[220px]" />
           </div>
         </section>
 
-        <main id="main" tabIndex={-1} aria-label="Sign in" className="flex min-w-0 flex-[1_1_440px] items-center justify-center px-6 py-14 sm:px-8">
+        <main
+          id="main"
+          tabIndex={-1}
+          aria-label="Sign in"
+          className="flex min-w-0 flex-[1_1_440px] items-center justify-center px-6 py-14 sm:px-8"
+        >
           <div className="flex w-full max-w-[420px] flex-col gap-8">
             <div className="flex items-center gap-3">
               <Logo />
               <div className="flex flex-col gap-px">
-                <span className="font-display text-[26px] font-extrabold leading-none tracking-tight">Kibaba</span>
-                <span className="text-[14px] text-muted">Early warning for chama officials</span>
+                <span className="font-display text-[26px] font-extrabold leading-none tracking-tight">
+                  Kibaba
+                </span>
+                <span className="text-[14px] text-muted">
+                  Early warning for chama officials
+                </span>
               </div>
             </div>
+
             <div className="flex flex-col gap-3">
               <h1 className="text-[44px] sm:text-[48px]">Sign in</h1>
               <p className="text-[18px] text-muted">
-                Officials see which members to follow up and why. Members see their own records.
+                Officials see which members to follow up and why. Members see
+                their own records.
               </p>
             </div>
-            <SignInForm ended={ended === "1"} next={safeNext(next)} site={site} serverDown={site === null}
-              step={step === "code" ? "code" : undefined} error={error && /^[a-z_]{2,40}$/.test(error) ? error : undefined} />
+
+            <SignInForm
+              ended={ended === "1"}
+              next={safeNext(next)}
+              site={site}
+              serverDown={site === null}
+              error={
+                error && /^[a-z_]{2,40}$/.test(error)
+                  ? error
+                  : undefined
+              }
+            />
+
             <div className="flex items-start gap-3 border-t border-line pt-5">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#187A42" strokeWidth="2.2"
-                strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-px shrink-0">
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#187A42"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className="mt-px shrink-0"
+              >
                 <rect x="5" y="11" width="14" height="9" rx="2" />
                 <path d="M8 11V8a4 4 0 0 1 8 0v3" />
               </svg>
+
               <p className="text-[15px] text-muted">
-                Members see only their own records, and ledger photos are shown only to officials, who confirm
-                each sign-in with a code texted to their phone.
+                Members see only their own records. Ledger photos are
+                accessible only to authorised officials. Sign in securely
+                using your Google account. Officials are encouraged to enable
+                Google 2-Step Verification for additional account protection.
               </p>
             </div>
           </div>

@@ -37,6 +37,9 @@ chamas:
     name: Humble Sister
     raw_dir: data/raw/chama_b
     photos_dir: data/photos/chama_b
+    # The meeting day, for the officials' text the day before (D-045): the first
+    # Sunday of the month on 69 of the 84 meetings with a written date.
+    meets: first sunday
   # Humble Sister in the web interface (D-036): chama B's typed pages with the
   # members' real names, which its officials agreed to show. The id is kept from
   # the earlier demo copy (D-028) so the release, its files and tests still find it.
@@ -58,6 +61,7 @@ chamas:
     renames:
       Beth Wamae: Alvin Muriithi
       Esther Mwangi: Alvin Wise
+    meets: first sunday  # as chama B: the officials' text the day before (D-045)
     raw_dir: data/raw/chama_demo
     photos_dir: data/photos/chama_demo
 

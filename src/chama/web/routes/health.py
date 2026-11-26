@@ -29,7 +29,7 @@ def health_report() -> tuple[bool, dict]:
         return False, parts
     if worker and datetime.now(timezone.utc) - worker.last_seen_at < WORKER_SILENT_AFTER:
         parts["worker"] = "ready"
-        if worker.model_loaded_at:
+        if worker.model_loaded_at and worker.model_run_id:      # a worker still loading has no run yet
             parts["model"] = f"ready (run {worker.model_run_id[:8]})"
     ready = all(v.startswith("ready") for v in parts.values())
     return ready, parts
