@@ -29,7 +29,8 @@ done
 
 echo "Checking release bundle..."
 test -f "$RELEASE/MANIFEST.json"
-test -f "$RELEASE/model/MLmodel"
+test -f "$RELEASE/model/champion.json"
+test -f "$RELEASE/model/files/MLmodel"
 test -f "$RELEASE/data/interim/aliases_chama_demo.csv"
 
 # Seed only missing files. Never overwrite records already on the VM.
