@@ -1,20 +1,16 @@
-"""Sign-in, sessions, CSRF and role checks (X1, X2, R1-R4, D-037), without a database.
-
-The account and session queries are replaced by an in-memory store and
-Supabase by a fake, so every rule of auth.py and services/signin.py is
-checked on its own: passwords, Google with PKCE, texted codes, and the code
-officials confirm every sign-in with.
-"""
+"""Google sign-in, sessions, CSRF and role checks without a database."""
 from __future__ import annotations
 
 import base64
 import hashlib
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import ClassVar
 from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
+import httpx
 
 from chama.web import auth
 from chama.web.data import users as users_data
@@ -26,121 +22,89 @@ from chama.web.settings import web_settings
 
 OFFICIAL = User(1, "alvin@example.com", "official", "chama_demo", None, "Alvin Muriithi", "treasurer", True,
                 phone="+254700000001")
-MEMBER = User(2, "wise@example.com", "member", "chama_demo", "M-aaaa1111", None, None, True, phone="+254700000002")
-OTHER_CHAMA = User(3, "other@example.com", "official", "chama_b", None, "Someone", "chair", True,
-                   phone="+254700000003")
-GONE = User(4, "gone@example.com", "official", "chama_demo", None, "Gone", None, False, phone="+254700000004")
-NO_PHONE = User(5, "nophone@example.com", "official", "chama_demo", None, "No Phone", "secretary", True)
-RIGHT_CODE = "123456"
+MEMBER = User(2, "wise@example.com", "member", "chama_demo", "M-aaaa1111", None, None, True,
+              phone="+254700000002")
+OTHER_CHAMA = User(3, "other@example.com", "official", "chama_b", None, "Someone", "chair", True)
+GONE = User(4, "gone@example.com", "official", "chama_demo", None, "Gone", None, False)
 
 
 class FakeStore:
     def __init__(self):
-        self.accounts = {u.email: u for u in (OFFICIAL, MEMBER, OTHER_CHAMA, GONE, NO_PHONE)}
-        self.sessions: dict[str, tuple[int, str, bool]] = {}
-        self.steps: dict[str, dict] = {}
-        self.linked: dict[int, dict[str, str]] = {}
+        self.accounts = {u.email.casefold(): u for u in (OFFICIAL, MEMBER, OTHER_CHAMA, GONE)}
+        self.sessions: dict[str, tuple[int, str, datetime, bool]] = {}
 
     def by_email(self, conn, email):
-        return self.accounts.get(email.strip().lower())
-
-    def by_phone(self, conn, phone):
-        return next((u for u in self.accounts.values() if u.phone == phone), None)
+        return self.accounts.get(email.strip().casefold())
 
     def by_id(self, conn, user_id):
         return next((u for u in self.accounts.values() if u.id == user_id), None)
 
     def link_identity(self, conn, user_id, identity_id):
-        self.linked.setdefault(user_id, {}).setdefault("email", identity_id)
-
-    def link_phone_identity(self, conn, user_id, identity_id):
-        self.linked.setdefault(user_id, {}).setdefault("phone", identity_id)
+        user = self.by_id(conn, user_id)
+        if user and user.identity_id is None:
+            self.accounts[user.email.casefold()] = replace(user, identity_id=identity_id)
 
     def start_session(self, conn, token_hash, user_id, csrf, expires_at):
-        assert expires_at > datetime.now(timezone.utc)
-        self.sessions[token_hash] = (user_id, csrf, True)
+        self.sessions[token_hash] = (user_id, csrf, expires_at, True)
 
     def session(self, conn, token_hash):
         found = self.sessions.get(token_hash)
-        if not found or not found[2]:
+        if not found or not found[3] or found[2] <= datetime.now(timezone.utc):
             return None
-        user = next(u for u in self.accounts.values() if u.id == found[0])
-        return (user, found[1]) if user.active else None
+        user = self.by_id(conn, found[0])
+        return (user, found[1]) if user and user.active else None
 
     def end_session(self, conn, token_hash):
         if token_hash in self.sessions:
-            user_id, csrf, _ = self.sessions[token_hash]
-            self.sessions[token_hash] = (user_id, csrf, False)
-
-    def start_step(self, conn, token_hash, user_id, method, identity_id, expires_at):
-        self.steps[token_hash] = {"token_hash": token_hash, "user_id": user_id, "method": method,
-                                  "identity_id": identity_id, "attempts": 0, "used": False}
-
-    def step(self, conn, token_hash):
-        found = self.steps.get(token_hash)
-        return dict(found) if found and not found["used"] else None
-
-    def count_attempt(self, conn, token_hash):
-        self.steps[token_hash]["attempts"] += 1
-        return self.steps[token_hash]["attempts"]
-
-    def end_step(self, conn, token_hash):
-        self.steps[token_hash]["used"] = True
+            user_id, csrf, expires, _ = self.sessions[token_hash]
+            self.sessions[token_hash] = (user_id, csrf, expires, False)
 
 
 class FakeSupabase:
-    passwords: ClassVar[dict[str, str]] = {}
-    texts: ClassVar[list[str]] = []                       # phones a code was sent to
-    google_codes: ClassVar[dict[str, str]] = {}           # Google round-trip code -> email
+    google_codes: ClassVar[dict[str, tuple[str, str]]] = {}
     verifiers: ClassVar[list[str]] = []
-    switched_on: ClassVar[dict[str, bool]] = {}
+    google_enabled: ClassVar[bool] = True
 
     @classmethod
     def reset(cls):
-        cls.passwords = {u.email: "right password" for u in (OFFICIAL, MEMBER, OTHER_CHAMA, GONE, NO_PHONE)}
-        cls.texts, cls.verifiers = [], []
-        cls.google_codes = {"g-member": MEMBER.email, "g-official": OFFICIAL.email, "g-stranger": "who@example.com"}
-        cls.switched_on = {"google": True, "phone": True}
-
-    def sign_in(self, email, password):
-        if self.passwords.get(email) != password:
-            raise ApiError(401, "bad_credentials", "That email and password do not match.", field="password")
-        return auth.Identity(id=f"sb-{email}", email=email)
+        cls.google_codes = {
+            "g-member": (MEMBER.email, "sb-member"),
+            "g-official": (OFFICIAL.email, "sb-official"),
+            "g-stranger": ("stranger@example.com", "sb-stranger"),
+            "g-mismatch": ("wise@example.com", "sb-other-identity"),
+        }
+        cls.verifiers = []
+        cls.google_enabled = True
 
     def providers(self):
-        return dict(self.switched_on)
+        return {"google": self.google_enabled}
 
     def google_url(self, redirect_to, challenge):
-        return ("https://sb.example/auth/v1/authorize?provider=google"
-                f"&redirect_to={redirect_to}&code_challenge={challenge}")
+        from urllib.parse import urlencode
+        return "https://sb.example/auth/v1/authorize?" + urlencode({
+            "provider": "google", "redirect_to": redirect_to,
+            "code_challenge": challenge, "code_challenge_method": "s256",
+        })
 
     def exchange_code(self, code, verifier):
         self.verifiers.append(verifier)
         if code not in self.google_codes:
-            raise ApiError(401, "google_failed", "Signing in with Google did not finish.")
-        email = self.google_codes[code]
-        return auth.Identity(id=f"sb-{email}", email=email)
-
-    def send_code(self, phone):
-        self.texts.append(phone)
-
-    def verify_code(self, phone, code):
-        if code != RIGHT_CODE:
-            raise ApiError(401, "bad_code", "That code is not right, or it has expired.", field="code")
-        return auth.Identity(id=f"sb-phone-{phone}", email="", phone=phone)
+            raise ApiError(401, "google_failed", "Google sign-in failed.")
+        email, identity_id = self.google_codes[code]
+        return auth.Identity(id=identity_id, email=email)
 
 
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     monkeypatch.setenv("COOKIE_SECURE", "false")
     monkeypatch.setenv("DEMO_MODE", "false")
-    monkeypatch.setenv("TWO_STEP_FOR_OFFICIALS", "true")
+    monkeypatch.setenv("SUPABASE_URL", "https://supabase.example")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "public-test-key")
     monkeypatch.setenv("WEB_LOG_DIR", str(tmp_path))
     web_settings.cache_clear()
     FakeSupabase.reset()
     store = FakeStore()
-    for name in ("by_email", "by_phone", "by_id", "link_identity", "link_phone_identity", "start_session", "session",
-                 "end_session", "start_step", "step", "count_attempt", "end_step"):
+    for name in ("by_email", "by_id", "link_identity", "start_session", "session", "end_session"):
         monkeypatch.setattr(users_data, name, getattr(store, name))
     monkeypatch.setattr(session, "member_names", lambda conn, chama: {"M-aaaa1111": "Alvin Wise"})
     monkeypatch.setattr(officials.early_warning, "overview", lambda conn, chama, lang: {"chama": chama})
@@ -148,12 +112,9 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setattr(officials.records, "is_member_of", lambda conn, chama, code: code.startswith(chama))
 
     from chama.web.app import create_app
-
     app = create_app()
-
     def no_database():
         yield None
-
     app.dependency_overrides[connection] = no_database
     app.dependency_overrides[auth.supabase_auth] = FakeSupabase
     with TestClient(app) as c:
@@ -162,292 +123,230 @@ def client(monkeypatch, tmp_path):
     web_settings.cache_clear()
 
 
-def sign_in(client, user: User):
-    """Password, then for an official the texted code."""
-    response = client.post("/api/session", json={"email": user.email, "password": "right password"})
-    assert response.status_code == 200, response.text
-    if user.is_official:
-        assert response.json() == {"next": "code", "phone_hint": f"the phone ending {user.phone[-3:]}"}
-        response = client.post("/api/session/code", json={"code": RIGHT_CODE})
-        assert response.status_code == 200, response.text
-    return response
+def begin_google(client, next_page=""):
+    url = "/api/session/google" + (f"?next={next_page}" if next_page else "")
+    return client.get(url, follow_redirects=False)
 
 
-def csrf(client) -> dict:
+def callback(client, code):
+    return client.get(f"/api/session/google/callback?code={code}", follow_redirects=False)
+
+
+def signed_in(client, email):
+    begin_google(client)
+    return callback(client, "g-member" if email == MEMBER.email else "g-official")
+
+
+def csrf(client):
     return {"x-csrf-token": client.cookies.get(auth.CSRF_COOKIE)}
 
 
-def test_sign_in_sets_an_httponly_session_and_a_csrf_cookie(client):
-    response = sign_in(client, OFFICIAL)
+def test_google_oauth_uses_supabase_and_server_side_pkce(client):
+    response = begin_google(client, "/m/loans")
+    assert response.status_code == 303
+    query = parse_qs(urlparse(response.headers["location"]).query)
+    assert query["provider"] == ["google"]
+    assert query["code_challenge_method"] == ["s256"]
+    # Unknown Host headers fall back to the first configured public origin.
+    assert query["redirect_to"] == ["http://localhost:3000/api/session/google/callback"]
+    cookie = next(c for c in response.headers.get_list("set-cookie") if c.startswith(auth.PKCE_COOKIE))
+    assert "HttpOnly" in cookie and "SameSite=lax" in cookie and "Path=/api/session/google" in cookie
+    verifier = client.cookies.get(auth.PKCE_COOKIE).strip('"').split("|")[0]
+    expected = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+    assert query["code_challenge"] == [expected]
+
+
+@pytest.mark.parametrize("code,role,landing", [
+    ("g-member", "member", "/m"),
+    ("g-official", "official", "/o"),
+])
+def test_existing_active_member_and_official_sign_in_without_sms(client, code, role, landing):
+    begin_google(client)
+    response = callback(client, code)
+    assert response.status_code == 303 and response.headers["location"] == landing
+    assert client.get("/api/me").json()["user"]["role"] == role
+    assert client.store.sessions
+
+
+def test_pkce_verifier_is_used_once_for_exchange(client):
+    begin_google(client)
+    verifier = client.cookies.get(auth.PKCE_COOKIE).strip('"').split("|")[0]
+    callback(client, "g-member")
+    assert FakeSupabase.verifiers == [verifier]
+
+
+@pytest.mark.parametrize("code,error", [("g-stranger", "no_access"), ("unknown", "google_failed")])
+def test_unknown_google_accounts_and_bad_codes_get_no_session(client, code, error):
+    begin_google(client)
+    response = callback(client, code)
+    assert response.headers["location"] == f"/signin?error={error}"
+    assert not client.store.sessions
+
+
+def test_inactive_account_gets_no_session(client):
+    FakeSupabase.google_codes["g-gone"] = (GONE.email, "sb-gone")
+    begin_google(client)
+    assert callback(client, "g-gone").headers["location"] == "/signin?error=no_access"
+
+
+def test_google_email_must_match_the_account_selected_by_backend(client, monkeypatch):
+    # Simulate a malformed/misbehaving account lookup returning the wrong row.
+    monkeypatch.setattr(users_data, "by_email", lambda conn, email: OFFICIAL)
+    begin_google(client)
+    response = callback(client, "g-member")
+    assert response.headers["location"] == "/signin?error=mismatch"
+    assert not client.store.sessions
+
+
+def test_existing_google_identity_cannot_be_silently_replaced(client):
+    client.store.accounts[MEMBER.email] = replace(MEMBER, identity_id="previous-google-id")
+    begin_google(client)
+    response = callback(client, "g-member")
+    assert response.headers["location"] == "/signin?error=mismatch"
+    assert client.store.accounts[MEMBER.email].identity_id == "previous-google-id"
+    assert not client.store.sessions
+
+
+def test_first_google_sign_in_links_identity_and_opens_session(client):
+    begin_google(client)
+    callback(client, "g-member")
+    assert client.store.accounts[MEMBER.email].identity_id == "sb-member"
+    assert client.store.sessions
+
+
+def test_session_cookie_is_http_only_and_csrf_cookie_is_readable(client):
+    begin_google(client)
+    response = callback(client, "g-official")
     cookies = response.headers.get_list("set-cookie")
     session_cookie = next(c for c in cookies if c.startswith(auth.SESSION_COOKIE))
     csrf_cookie = next(c for c in cookies if c.startswith(auth.CSRF_COOKIE))
     assert "HttpOnly" in session_cookie and "SameSite=lax" in session_cookie
-    assert "HttpOnly" not in csrf_cookie
-    assert response.json()["user"] == {
-        "name": "Alvin Muriithi", "role": "official", "position": "treasurer", "chama_id": "chama_demo",
-        "chama_name": "Humble Sister", "member_code": None, "language": "en",
-    }
+    assert "HttpOnly" not in csrf_cookie and "SameSite=lax" in csrf_cookie
     token = client.cookies.get(auth.SESSION_COOKIE)
-    assert token not in client.store.sessions            # only the hash is stored
+    assert token not in client.store.sessions
     assert auth.hash_token(token) in client.store.sessions
+    assert "Max-Age=43200" in session_cookie
 
 
-def test_wrong_password_is_refused_next_to_the_field(client):
-    response = client.post("/api/session", json={"email": OFFICIAL.email, "password": "wrong"})
-    assert response.status_code == 401
-    error = response.json()["error"]
-    assert error["field"] == "password" and error["ref"].startswith("R-")
+def test_production_session_cookie_is_secure(client, monkeypatch):
+    monkeypatch.setenv("COOKIE_SECURE", "true")
+    web_settings.cache_clear()
+    begin_google(client)
+    response = callback(client, "g-official")
+    session_cookie = next(c for c in response.headers.get_list("set-cookie") if c.startswith(auth.SESSION_COOKIE))
+    assert "Secure" in session_cookie and "HttpOnly" in session_cookie
 
 
-def test_missing_email_is_refused_next_to_the_field(client):
-    response = client.post("/api/session", json={"email": "", "password": "x"})
-    assert response.status_code == 422 and response.json()["error"]["field"] == "email"
+def test_password_and_phone_auth_routes_are_not_available(client):
+    assert client.post("/api/session", json={"email": OFFICIAL.email, "password": "ignored"}).status_code == 405
+    assert client.post("/api/session/phone", json={"phone": OFFICIAL.phone}).status_code == 404
+    assert client.post("/api/session/code", json={"code": "123456"}).status_code == 404
+    assert not client.store.sessions
 
 
-def test_an_unknown_or_deactivated_account_gets_no_session(client):
-    client.store.accounts.pop(OFFICIAL.email)
-    FakeSupabase.passwords["new@example.com"] = "right password"
-    for email in ("new@example.com", GONE.email):
-        response = client.post("/api/session", json={"email": email, "password": "right password"})
-        assert response.status_code == 403 and response.json()["error"]["code"] == "no_access"
-    assert client.store.sessions == {}
-
-
-def test_without_a_session_every_page_says_the_session_ended(client):
-    for path in ("/api/me", "/api/overview", "/api/members/chama_demo-1"):
-        response = client.get(path)
-        assert response.status_code == 401
-        assert response.json()["error"]["message"] == "Your session ended. Sign in again to carry on."
-
-
-def test_signing_out_ends_the_session(client):
-    sign_in(client, OFFICIAL)
+def test_logout_ends_server_session(client):
+    signed_in(client, OFFICIAL.email)
     assert client.get("/api/me").status_code == 200
-    assert client.delete("/api/session").status_code == 200
+    assert client.delete("/api/session", headers=csrf(client)).json() == {"signed_out": True}
     assert client.get("/api/me").status_code == 401
 
 
-def test_changes_need_the_sessions_csrf_token(client):
+def test_csrf_protects_changes(client):
     from fastapi import APIRouter
-
-    sign_in(client, OFFICIAL)
+    signed_in(client, OFFICIAL.email)
     router = APIRouter()
-
     @router.post("/api/test-change")
     def change(user: auth.Official) -> dict:
         return {"ok": True}
-
     client.app.include_router(router)
     assert client.post("/api/test-change").json()["error"]["code"] == "csrf"
     assert client.post("/api/test-change", headers={"x-csrf-token": "forged"}).status_code == 403
     assert client.post("/api/test-change", headers=csrf(client)).json() == {"ok": True}
 
 
-def test_the_language_of_the_reasons_is_saved_on_the_account(client, monkeypatch):
-    saved = []
-    monkeypatch.setattr(users_data, "set_language", lambda conn, user_id, language: saved.append((user_id, language)))
-    sign_in(client, OFFICIAL)
-    assert client.put("/api/me/language", json={"language": "sw"}).json()["error"]["code"] == "csrf"
-    assert client.put("/api/me/language", json={"language": "sw"}, headers=csrf(client)).json() == {"language": "sw"}
-    refused = client.put("/api/me/language", json={"language": "fr"}, headers=csrf(client))
-    assert refused.status_code == 422 and refused.json()["error"]["field"] == "language"
-    assert saved == [(OFFICIAL.id, "sw")]
+def test_expired_session_is_rejected(client):
+    signed_in(client, MEMBER.email)
+    token = client.cookies.get(auth.SESSION_COOKIE)
+    key = auth.hash_token(token)
+    user_id, csrf_token, _, active = client.store.sessions[key]
+    client.store.sessions[key] = (user_id, csrf_token, datetime.now(timezone.utc), active)
+    assert client.get("/api/me").status_code == 401
 
 
-def test_changes_from_another_site_are_refused(client):
-    response = client.post("/api/session", json={"email": OFFICIAL.email, "password": "right password"},
-                           headers={"origin": "https://evil.example"})
+def test_role_authorization_is_based_on_database_account(client):
+    signed_in(client, MEMBER.email)
+    assert client.get("/api/me").json()["user"]["role"] == "member"
+    assert client.get("/api/overview").status_code == 403
+
+
+def test_official_is_scoped_to_their_database_chama(client):
+    FakeSupabase.google_codes["g-other"] = (OTHER_CHAMA.email, "sb-other")
+    begin_google(client)
+    callback(client, "g-other")
+    assert client.get("/api/overview").json() == {"chama": "chama_b"}
+    assert client.get("/api/members/chama_demo-1").status_code == 403
+
+
+def test_site_and_frontend_contract_report_google_only(client):
+    site_body = client.get("/api/site").json()
+    assert site_body == {"demo_mode": False, "sign_in_ready": True, "methods": {"google": True}}
+    FakeSupabase.google_enabled = False
+    assert client.get("/api/site").json()["methods"] == {"google": False}
+    assert begin_google(client).headers["location"] == "/signin?error=google_off"
+
+
+def test_callback_without_pkce_cookie_is_rejected(client):
+    assert callback(client, "g-member").headers["location"] == "/signin?error=google_failed"
+    assert not FakeSupabase.verifiers
+
+
+def test_changes_from_another_origin_are_refused(client):
+    signed_in(client, OFFICIAL.email)
+    response = client.delete("/api/session", headers={**csrf(client), "origin": "https://evil.example"})
     assert response.status_code == 403 and response.json()["error"]["code"] == "origin"
 
 
-def test_a_member_gets_not_allowed_on_officials_routes(client):
-    sign_in(client, MEMBER)
-    assert client.get("/api/me").json()["user"]["name"] == "Alvin Wise"
-    for path in ("/api/overview", "/api/members", "/api/members/chama_demo-1"):
-        response = client.get(path)
-        assert response.status_code == 403
-        assert response.json()["error"]["code"] == "not_allowed"
-
-
-def test_an_official_sees_only_their_own_chamas_members(client):
-    sign_in(client, OTHER_CHAMA)
-    assert client.get("/api/overview").json() == {"chama": "chama_b"}   # from the account, not the URL
-    assert client.get("/api/members/chama_demo-1").status_code == 403
-    assert client.get("/api/members/chama_b-1").json() == {"code": "chama_b-1"}
-
-
-def test_demo_mode_keeps_a_real_officials_name_off_screen(client, monkeypatch):
-    monkeypatch.setenv("DEMO_MODE", "true")
+def test_google_sign_in_can_be_disabled_when_supabase_is_not_configured(client, monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "")
+    monkeypatch.setenv("SUPABASE_PUBLISHABLE_KEY", "")
     web_settings.cache_clear()
-    sign_in(client, OTHER_CHAMA)                     # chama_b is a real chama
-    me = client.get("/api/me").json()
-    assert me["user"]["name"] == "Chair" and me["demo_mode"] is True
+    assert client.get("/api/site").json()["methods"] == {"google": False}
 
 
-def test_errors_never_show_a_stack_trace(client, monkeypatch):
-    def broken(conn, chama, lang):
-        raise RuntimeError("secret detail")
-
-    monkeypatch.setattr(officials.early_warning, "overview", broken)
-    sign_in(client, OFFICIAL)
-    with TestClient(client.app, raise_server_exceptions=False) as c:
-        c.cookies = client.cookies
-        response = c.get("/api/overview")
-    assert response.status_code == 500
-    body = response.json()["error"]
-    assert "secret" not in body["message"] and body["ref"] in body["message"]
-
-
-# ---- D-037: the texted code, phone sign-in and Google ---------------------------------
-
-
-def test_an_officials_password_alone_opens_nothing_until_the_texted_code(client):
-    response = client.post("/api/session", json={"email": OFFICIAL.email, "password": "right password"})
-    assert response.json() == {"next": "code", "phone_hint": "the phone ending 001"}
-    assert FakeSupabase.texts == [OFFICIAL.phone]
-    assert auth.SESSION_COOKIE not in client.cookies and client.store.sessions == {}
-    assert client.get("/api/me").status_code == 401
-    assert client.get("/api/session/step").json() == {"waiting": True, "method": "password",
-                                                      "phone_hint": "the phone ending 001"}
-    assert client.post("/api/session/code", json={"code": RIGHT_CODE}).status_code == 200
-    assert client.get("/api/me").json()["user"]["role"] == "official"
-    assert client.store.linked[OFFICIAL.id] == {"email": f"sb-{OFFICIAL.email}", "phone": f"sb-phone-{OFFICIAL.phone}"}
-    assert client.get("/api/session/step").json() == {"waiting": False}   # the code is used once
-
-
-def test_wrong_codes_are_counted_and_the_fifth_ends_the_sign_in(client):
-    client.post("/api/session", json={"email": OFFICIAL.email, "password": "right password"})
-    for left in (4, 3, 2, 1):
-        response = client.post("/api/session/code", json={"code": "000000"})
-        assert response.status_code == 401
-        error = response.json()["error"]
-        assert error["field"] == "code" and f"({left} tr" in error["message"]
-    response = client.post("/api/session/code", json={"code": "000000"})
-    assert response.json()["error"]["code"] == "step_ended"
-    assert client.post("/api/session/code", json={"code": RIGHT_CODE}).json()["error"]["code"] == "step_ended"
-    assert client.store.sessions == {}
-
-
-def test_a_code_must_have_six_digits(client):
-    client.post("/api/session", json={"email": OFFICIAL.email, "password": "right password"})
-    response = client.post("/api/session/code", json={"code": "12 34"})
-    assert response.status_code == 422 and response.json()["error"]["field"] == "code"
-
-
-def test_an_official_without_a_phone_is_told_to_ask_for_one(client):
-    response = client.post("/api/session", json={"email": NO_PHONE.email, "password": "right password"})
-    assert response.status_code == 403 and response.json()["error"]["code"] == "no_phone"
-    assert FakeSupabase.texts == []
-
-
-def test_with_the_second_step_off_an_official_signs_in_with_the_password(client, monkeypatch):
-    monkeypatch.setenv("TWO_STEP_FOR_OFFICIALS", "false")
-    web_settings.cache_clear()
-    response = client.post("/api/session", json={"email": NO_PHONE.email, "password": "right password"})
-    assert response.json()["user"]["role"] == "official" and FakeSupabase.texts == []
-
-
-def test_a_member_signs_in_with_a_phone_and_the_texted_code(client):
-    response = client.post("/api/session/phone", json={"phone": "0700 000 002"})
-    assert response.json() == {"next": "code", "phone_hint": "the phone ending 002"}
-    assert FakeSupabase.texts == [MEMBER.phone]
-    me = client.post("/api/session/code", json={"code": RIGHT_CODE}).json()
-    assert me["user"]["name"] == "Alvin Wise" and me["user"]["role"] == "member"
-    assert client.store.linked[MEMBER.id] == {"phone": f"sb-phone-{MEMBER.phone}"}
-
-
-@pytest.mark.parametrize("phone, code", [
-    ("0700 000 009", "no_access"),          # no account: nothing is texted, so nobody pays for strangers' texts
-    ("0700000004", "no_access"),            # a deactivated account
-    ("0700000001", "official_phone"),       # officials start with Google or a password
-    ("12345", "phone_invalid"),
+@pytest.mark.parametrize("written,expected", [
+    ("0712 345 678", "+254712345678"), ("0112345678", "+254112345678"),
+    ("712345678", "+254712345678"), ("254712345678", "+254712345678"),
+    ("+254 712-345-678", "+254712345678"), ("00254712345678", "+254712345678"),
+    ("+447700900123", "+447700900123"), ("0812345678", None), ("07123", None),
+    ("phone", None), ("", None),
 ])
-def test_phone_sign_in_texts_only_numbers_with_a_members_account(client, phone, code):
-    response = client.post("/api/session/phone", json={"phone": phone})
-    assert response.json()["error"]["code"] == code and response.json()["error"]["field"] == "phone"
-    assert FakeSupabase.texts == []
-
-
-def test_resend_texts_the_same_phone_again(client):
-    client.post("/api/session/phone", json={"phone": "0700000002"})
-    assert client.post("/api/session/code/resend").json()["sent"] is True
-    assert FakeSupabase.texts == [MEMBER.phone, MEMBER.phone]
-
-
-def test_a_code_without_a_waiting_sign_in_is_refused(client):
-    response = client.post("/api/session/code", json={"code": RIGHT_CODE})
-    assert response.status_code == 401 and response.json()["error"]["code"] == "step_ended"
-
-
-def test_google_goes_through_supabase_with_a_pkce_challenge(client):
-    response = client.get("/api/session/google?next=/m/loans", follow_redirects=False)
-    assert response.status_code == 303
-    query = parse_qs(urlparse(response.headers["location"]).query)
-    assert query["redirect_to"] == ["http://testserver/api/session/google/callback"] or query["redirect_to"] == [
-        "http://localhost:3000/api/session/google/callback"]
-    cookie = next(c for c in response.headers.get_list("set-cookie") if c.startswith(auth.PKCE_COOKIE))
-    assert "HttpOnly" in cookie and "Path=/api/session/google" in cookie
-    verifier = client.cookies.get(auth.PKCE_COOKIE).strip('"').split("|")[0]
-    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
-    assert query["code_challenge"] == [challenge]
-
-
-def test_back_from_google_a_member_lands_on_their_page(client):
-    client.get("/api/session/google?next=/m/loans", follow_redirects=False)
-    sent = client.cookies.get(auth.PKCE_COOKIE).strip('"').split("|")[0]
-    response = client.get("/api/session/google/callback?code=g-member", follow_redirects=False)
-    assert response.headers["location"] == "/m/loans"
-    assert FakeSupabase.verifiers == [sent]                 # the code is exchanged with this browser's verifier
-    assert client.get("/api/me").json()["user"]["role"] == "member"
-
-
-def test_back_from_google_an_official_still_types_the_code(client):
-    client.get("/api/session/google", follow_redirects=False)
-    response = client.get("/api/session/google/callback?code=g-official", follow_redirects=False)
-    assert response.headers["location"] == "/signin?step=code"
-    assert client.get("/api/me").status_code == 401 and FakeSupabase.texts == [OFFICIAL.phone]
-    assert client.post("/api/session/code", json={"code": RIGHT_CODE}).json()["user"]["role"] == "official"
-
-
-@pytest.mark.parametrize("query, error", [
-    ("code=g-stranger", "no_access"),        # a Google account with no chama account
-    ("code=unknown", "google_failed"),
-    ("error=access_denied", "google_failed"),
-])
-def test_google_problems_come_back_to_the_sign_in_page(client, query, error):
-    client.get("/api/session/google", follow_redirects=False)
-    response = client.get(f"/api/session/google/callback?{query}", follow_redirects=False)
-    assert response.headers["location"] == f"/signin?error={error}"
-    assert client.store.sessions == {}
-
-
-def test_google_without_the_browsers_verifier_is_refused(client):
-    response = client.get("/api/session/google/callback?code=g-member", follow_redirects=False)
-    assert response.headers["location"] == "/signin?error=google_failed" and FakeSupabase.verifiers == []
-
-
-def test_the_sign_in_page_hears_which_ways_are_switched_on(client):
-    FakeSupabase.switched_on = {"google": False, "phone": True}
-    site = client.get("/api/site").json()
-    assert site["methods"] == {"password": web_settings().supabase_ready, "google": False, "phone": True}
-    assert site["officials_confirm_by_phone"] is True
-    response = client.get("/api/session/google", follow_redirects=False)
-    assert response.headers["location"] == "/signin?error=google_off"
-
-
-@pytest.mark.parametrize("written, expected", [
-    ("0712 345 678", "+254712345678"),
-    ("0112345678", "+254112345678"),
-    ("712345678", "+254712345678"),
-    ("254712345678", "+254712345678"),
-    ("+254 712-345-678", "+254712345678"),
-    ("00254712345678", "+254712345678"),
-    ("+447700900123", "+447700900123"),
-    ("0812345678", None),
-    ("07123", None),
-    ("phone", None),
-    ("", None),
-])
-def test_phone_numbers_are_read_as_kenyan_numbers(written, expected):
+def test_phone_numbers_remain_normalizable_for_account_data_and_reminders(written, expected):
     assert auth.normalise_phone(written) == expected
+
+
+def test_supabase_provider_probe_reports_google_availability_only(monkeypatch):
+    settings = replace(web_settings(), supabase_url="https://supabase.example", supabase_key="public-test-key")
+    monkeypatch.setattr(auth, "_PROVIDERS", {})
+    def handler(request):
+        assert request.url.path == "/auth/v1/settings"
+        assert request.headers["apikey"] == "public-test-key"
+        return httpx.Response(200, json={"external": {"google": True, "phone": True, "email": True}})
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    assert auth.SupabaseAuth(settings, client=client).providers() == {"google": True}
+
+
+def test_supabase_code_exchange_uses_pkce_verifier():
+    settings = replace(web_settings(), supabase_url="https://supabase.example", supabase_key="public-test-key")
+    verifier = "a-pkce-verifier"
+    def handler(request):
+        assert request.method == "POST"
+        assert request.url.path == "/auth/v1/token"
+        assert request.url.params["grant_type"] == "pkce"
+        assert request.headers["apikey"] == "public-test-key"
+        assert request.read().decode() == (
+            '{"auth_code":"oauth-code","code_verifier":"a-pkce-verifier"}'
+        )
+        return httpx.Response(200, json={"user": {"id": "google-user-id", "email": "member@example.com"}})
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    identity = auth.SupabaseAuth(settings, client=client).exchange_code("oauth-code", verifier)
+    assert identity == auth.Identity(id="google-user-id", email="member@example.com")

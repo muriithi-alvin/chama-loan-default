@@ -204,18 +204,18 @@ def test_a_bucket_that_is_not_private_is_not_attached(bundle):
     assert "volumes" not in [c[0] for c in hub.calls] and "file" not in [c[0] for c in hub.calls]
 
 
-def test_the_treasurers_phone_goes_up_as_a_secret(bundle, monkeypatch):
+def test_phone_is_optional_account_data_and_not_an_auth_requirement(bundle, monkeypatch):
     from chama.deploy import publish
 
-    monkeypatch.setenv("TWO_STEP_FOR_OFFICIALS", "true")
     hub = FakeHub()
     publish(api=hub, bundle=bundle)
     secrets = {c[1]: c[2] for c in hub.calls if c[0] == "secret"}
     assert secrets["RELEASE_OFFICIAL_PHONE"] == "0700000001"
     assert "0700000001" not in [c[2] for c in hub.calls if c[0] == "variable"]
     monkeypatch.delenv("RELEASE_OFFICIAL_PHONE")
-    with pytest.raises(StepFailed, match="RELEASE_OFFICIAL_PHONE"):
-        publish(api=FakeHub(), bundle=bundle)
+    hub_without_phone = FakeHub()
+    publish(api=hub_without_phone, bundle=bundle)
+    assert "RELEASE_OFFICIAL_PHONE" not in [c[1] for c in hub_without_phone.calls if c[0] == "secret"]
 
 
 def test_the_release_serves_the_chamas_marked_for_it():
@@ -289,14 +289,10 @@ def test_the_laptop_release_names_missing_settings_and_bundle(laptop, monkeypatc
         laptop_settings("https://name.ngrok-free.app", laptop)
 
 
-def test_the_treasurers_phone_is_needed_while_officials_confirm_by_text(laptop, monkeypatch):
+def test_laptop_release_does_not_require_an_official_phone_for_auth(laptop, monkeypatch):
     from chama.deploy import laptop_settings
 
     monkeypatch.delenv("RELEASE_OFFICIAL_PHONE")
-    monkeypatch.setenv("TWO_STEP_FOR_OFFICIALS", "true")
-    with pytest.raises(StepFailed, match="RELEASE_OFFICIAL_PHONE"):
-        laptop_settings("https://name.ngrok-free.app", laptop)
-    monkeypatch.setenv("TWO_STEP_FOR_OFFICIALS", "false")
     assert laptop_settings("https://name.ngrok-free.app", laptop)["CHAMA_ONLY"] == "chama_demo"
 
 

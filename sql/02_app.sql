@@ -197,12 +197,12 @@ CREATE TABLE IF NOT EXISTS app.worker_status (
     last_seen_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- D-037: sign-in with Google or with a code texted to a phone, and officials
--- confirm every sign-in with a code texted to their phone. A phone sign-in is a
--- Supabase user of its own, so its id is kept beside the email one.
-ALTER TABLE app.users ADD COLUMN IF NOT EXISTS phone TEXT;                    -- +2547..., where codes are texted
-ALTER TABLE app.users ADD COLUMN IF NOT EXISTS phone_identity_id TEXT UNIQUE; -- Supabase user id of the phone sign-in
-ALTER TABLE app.users ALTER COLUMN email DROP NOT NULL;                       -- a member may have a phone only
+-- Legacy phone-auth columns remain for database compatibility. Kibaba now
+-- requires an existing email account and uses Google Sign-In; phone is kept
+-- as optional account information for meeting reminders.
+ALTER TABLE app.users ADD COLUMN IF NOT EXISTS phone TEXT;                    -- Optional contact, e.g. +2547...
+ALTER TABLE app.users ADD COLUMN IF NOT EXISTS phone_identity_id TEXT UNIQUE; -- Legacy Supabase phone identity
+ALTER TABLE app.users ALTER COLUMN email DROP NOT NULL;                       -- Legacy constraint retained
 CREATE UNIQUE INDEX IF NOT EXISTS users_phone ON app.users (phone);
 DO $$
 BEGIN

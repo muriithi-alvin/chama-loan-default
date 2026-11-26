@@ -23,11 +23,12 @@ export type Language = "en" | "sw";
 export interface Site {
   demo_mode: boolean;
   sign_in_ready: boolean;
-  methods: { password: boolean; google: boolean; phone: boolean };
-  officials_confirm_by_phone: boolean;
+  methods: {
+    google: boolean;
+  };
 }
 
-/** A sign-in waiting for its texted code. */
+/** Legacy response type retained for compatibility with older code. */
 export interface CodeStep {
   next: "code";
   phone_hint: string;

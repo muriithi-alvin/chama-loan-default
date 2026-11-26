@@ -1,3 +1,4 @@
+
 """Settings for the web interface, read from .env (see .env.example)."""
 from __future__ import annotations
 
@@ -19,17 +20,21 @@ def _flag(name: str, default: bool) -> bool:
 @dataclass(frozen=True)
 class WebSettings:
     supabase_url: str
-    supabase_key: str              # the publishable (or legacy anon) key; never the secret key
-    demo_mode: bool                # fictional names and the demo banner (ground rule G5)
-    photo_dir: Path                # uploaded photos, outside every web folder
-    cookie_secure: bool            # false only to test from a phone over plain http on the LAN
+    supabase_key: str  # publishable (or legacy anon) key; never the secret key
+    demo_mode: bool
+    photo_dir: Path
+    cookie_secure: bool
     session_hours: int
     allowed_origins: tuple[str, ...]
     log_dir: Path
-    two_step_for_officials: bool = True   # officials confirm each sign-in with a texted code (D-037)
-    phone_country: str = "254"            # for numbers written as 07..., 01... (Kenya)
-    meeting_texts: bool = False           # text officials the day before each meeting (D-045)
-    meeting_text_hour: int = 9            # from this hour, Nairobi time, on the day before
+
+    # Legacy compatibility: Kibaba now uses Google-only authentication.
+    two_step_for_officials: bool = False
+
+    # Phone numbers remain available for account records and meeting reminders.
+    phone_country: str = "254"
+    meeting_texts: bool = False
+    meeting_text_hour: int = 9
 
     @property
     def supabase_ready(self) -> bool:
@@ -38,33 +43,63 @@ class WebSettings:
 
 @lru_cache
 def web_settings() -> WebSettings:
-    photo_dir = Path(os.getenv("PHOTO_DIR", "").strip() or PROJECT_ROOT / "data" / "interim" / "uploads")
+    photo_dir = Path(
+        os.getenv("PHOTO_DIR", "").strip()
+        or PROJECT_ROOT / "data" / "interim" / "uploads"
+    )
+
     if not photo_dir.is_absolute():
         photo_dir = PROJECT_ROOT / photo_dir
-    origins = os.getenv("WEB_ORIGINS", "").strip() or "http://localhost:3000,http://127.0.0.1:3000"
+
+    origins = (
+        os.getenv("WEB_ORIGINS", "").strip()
+        or "http://localhost:3000,http://127.0.0.1:3000"
+    )
+
     return WebSettings(
         supabase_url=os.getenv("SUPABASE_URL", "").strip().rstrip("/"),
-        supabase_key=(os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip()
-                      or os.getenv("SUPABASE_ANON_KEY", "").strip()),
+        supabase_key=(
+            os.getenv("SUPABASE_PUBLISHABLE_KEY", "").strip()
+            or os.getenv("SUPABASE_ANON_KEY", "").strip()
+        ),
         demo_mode=_flag("DEMO_MODE", False),
         photo_dir=photo_dir,
         cookie_secure=_flag("COOKIE_SECURE", True),
         session_hours=int(os.getenv("SESSION_HOURS", "12")),
-        allowed_origins=tuple(o.strip().rstrip("/") for o in origins.split(",") if o.strip()),
-        # tests write to a folder of their own, so web-stats shows real use only
-        log_dir=Path(os.getenv("WEB_LOG_DIR", "").strip() or PROJECT_ROOT / "data" / "logs"),
-        two_step_for_officials=_flag("TWO_STEP_FOR_OFFICIALS", True),
-        phone_country=os.getenv("PHONE_COUNTRY_CODE", "").strip().lstrip("+") or "254",
+        allowed_origins=tuple(
+            origin.strip().rstrip("/")
+            for origin in origins.split(",")
+            if origin.strip()
+        ),
+        # Tests write to a folder of their own, so web-stats shows real use only.
+        log_dir=Path(
+            os.getenv("WEB_LOG_DIR", "").strip()
+            or PROJECT_ROOT / "data" / "logs"
+        ),
+        phone_country=(
+            os.getenv("PHONE_COUNTRY_CODE", "").strip().lstrip("+")
+            or "254"
+        ),
         meeting_texts=_flag("MEETING_TEXTS", False),
-        meeting_text_hour=min(23, max(0, int(os.getenv("MEETING_TEXT_HOUR", "").strip() or "9"))),
+        meeting_text_hour=min(
+            23,
+            max(
+                0,
+                int(os.getenv("MEETING_TEXT_HOUR", "").strip() or "9"),
+            ),
+        ),
     )
 
 
 @lru_cache
 def chamas() -> dict[str, dict]:
-    """The chamas in config/pipeline.yaml by id, each with its `name` and `demo` flag."""
+    """The chamas in config/pipeline.yaml by id, each with its name and demo flag."""
     return {
-        c["id"]: {**c, "name": c.get("name") or c["id"], "demo": bool(c.get("demo"))}
+        c["id"]: {
+            **c,
+            "name": c.get("name") or c["id"],
+            "demo": bool(c.get("demo")),
+        }
         for c in load_config()["chamas"]
     }
 

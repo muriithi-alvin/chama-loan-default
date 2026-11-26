@@ -19,7 +19,7 @@ class User:
     position: str | None
     active: bool
     identity_id: str | None = None
-    phone: str | None = None              # +2547...: phone sign-in and officials' second step (D-037)
+    phone: str | None = None              # Optional account contact and meeting reminders.
     phone_identity_id: str | None = None
     language: str = "en"                  # en or sw: the early-warning words and the meeting text (D-044)
 

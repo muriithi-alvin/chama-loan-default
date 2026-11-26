@@ -1,3 +1,4 @@
+
 """The cloud release: its private bundle and publishing it (Sprint III, D-032).
 
 The release on Hugging Face runs the demo chama only (fictional names,
@@ -51,11 +52,22 @@ BUCKET_NAME = "kibaba-storage"       # the Space's lasting records (D-041)
 MOUNT_PATH = "/data"
 BACKUP_DIR = "/data/kibaba"
 GITHUB_REPO = "muriithi-alvin/chama-loan-default"
-# What publish reads from .env; the laptop's own database settings are not among them
-PUBLISH_SETTINGS = ("HF_TOKEN", "HF_BUILD_TOKEN", "GITHUB_READ_TOKEN", "CLOUD_PSEUDONYM_KEY", "GROQ_API_KEY",
-                    "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "RELEASE_OFFICIAL_EMAIL", "RELEASE_MEMBER_EMAIL")
+
+# What publish reads from .env; the laptop's own database settings are not among them.
+PUBLISH_SETTINGS = (
+    "HF_TOKEN",
+    "HF_BUILD_TOKEN",
+    "GITHUB_READ_TOKEN",
+    "CLOUD_PSEUDONYM_KEY",
+    "GROQ_API_KEY",
+    "SUPABASE_URL",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "RELEASE_OFFICIAL_EMAIL",
+    "RELEASE_MEMBER_EMAIL",
+)
+
 # The release's two accounts (D-036): members of Humble Sister renamed in the
-# interface copy, so the project's own email and phone can sign in as them
+# interface copy, so the project's own Google accounts can sign in as them.
 OFFICIAL_NAME = "Alvin Muriithi"     # the treasurer
 MEMBER_NAME = "Alvin Wise"           # an ordinary member
 
@@ -114,7 +126,7 @@ def build(config: dict, out_dir: Path | None = None) -> Path:
     if len(demo) != 1:
         raise StepFailed("Exactly one chama with demo: true is needed in config/pipeline.yaml.")
     demo_id, raw_dir = demo[0]["id"], PROJECT_ROOT / demo[0]["raw_dir"]
-    books = sorted(raw_dir.glob("*.xlsx"))           # the yearly workbooks, not scans/
+    books = sorted(raw_dir.glob("*.xlsx"))
     names_file = aliases.review_file(demo_id)
     if not books or not names_file.exists():
         raise StepFailed(f"Build the demo chama first: python -m chama.pipeline demo-chama "
@@ -143,37 +155,78 @@ def build(config: dict, out_dir: Path | None = None) -> Path:
     shutil.copy2(names_file, out_dir / "data" / "interim" / names_file.name)
     champion = export_bundle(out_dir / "model", config=config)
 
-    files = {p.relative_to(out_dir).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-             for p in sorted(out_dir.rglob("*")) if p.is_file()}
-    manifest = {"built_at": datetime.now(UTC).isoformat(timespec="seconds"), "demo_chama": demo_id,
-                "model": {"version": champion.version, "run_id": champion.run_id, "checksum": champion.checksum},
-                "checked_against_real_names": len(real), "real_names": names_are_real(demo[0]),
-                "hosting_agreed": hosting_agreed(demo[0]), "files": files}
+    files = {
+        p.relative_to(out_dir).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in sorted(out_dir.rglob("*"))
+        if p.is_file()
+    }
+    manifest = {
+        "built_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "demo_chama": demo_id,
+        "model": {
+            "version": champion.version,
+            "run_id": champion.run_id,
+            "checksum": champion.checksum,
+        },
+        "checked_against_real_names": len(real),
+        "real_names": names_are_real(demo[0]),
+        "hosting_agreed": hosting_agreed(demo[0]),
+        "files": files,
+    }
     (out_dir / "MANIFEST.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8")
     return out_dir
 
 
 def add_accounts(config: dict, engine) -> None:
-    """The release's treasurer and member (RELEASE_*_EMAIL, RELEASE_*_PHONE).
-    Sign-in itself (password, Google, phone codes) is Supabase Auth's, as on the laptop."""
+    """Create the release's treasurer and member accounts.
+
+    Google sign-in is handled through Supabase Auth. Phone numbers are retained
+    for account records and meeting reminders, not authentication.
+    """
     from sqlalchemy import text
 
     from chama.web.services.accounts import add_user
 
     demo_id = next(c["id"] for c in config["chamas"] if c.get("demo"))
     with engine.connect() as conn:
-        code = conn.execute(text("SELECT member_code FROM private.member_codes WHERE chama_id = :c "
-                                 "AND canonical_name = :n"), {"c": demo_id, "n": MEMBER_NAME}).scalar_one_or_none()
+        code = conn.execute(
+            text(
+                "SELECT member_code FROM private.member_codes "
+                "WHERE chama_id = :c AND canonical_name = :n"
+            ),
+            {"c": demo_id, "n": MEMBER_NAME},
+        ).scalar_one_or_none()
+
     if code is None:
         raise StepFailed(f"{MEMBER_NAME} is not a member of {demo_id}.")
 
     def phone(name: str) -> str | None:
         return os.getenv(name, "").strip() or None
 
-    print(add_user(engine, os.environ["RELEASE_OFFICIAL_EMAIL"].strip(), "official", demo_id, None,
-                   OFFICIAL_NAME, "treasurer", phone=phone("RELEASE_OFFICIAL_PHONE")))
-    print(add_user(engine, os.environ["RELEASE_MEMBER_EMAIL"].strip(), "member", demo_id, code, None, None,
-                   phone=phone("RELEASE_MEMBER_PHONE")))
+    print(
+        add_user(
+            engine,
+            os.environ["RELEASE_OFFICIAL_EMAIL"].strip(),
+            "official",
+            demo_id,
+            None,
+            OFFICIAL_NAME,
+            "treasurer",
+            phone=phone("RELEASE_OFFICIAL_PHONE"),
+        )
+    )
+    print(
+        add_user(
+            engine,
+            os.environ["RELEASE_MEMBER_EMAIL"].strip(),
+            "member",
+            demo_id,
+            code,
+            None,
+            None,
+            phone=phone("RELEASE_MEMBER_PHONE"),
+        )
+    )
 
 
 def first_start(config: dict, engine) -> None:
@@ -188,39 +241,63 @@ def first_start(config: dict, engine) -> None:
     create_schemas(engine)
     with engine.connect() as conn:
         loaded = table_exists(conn, "analytics.meetings") and conn.execute(
-            text("SELECT count(*) FROM analytics.meetings")).scalar_one() > 0
+            text("SELECT count(*) FROM analytics.meetings")
+        ).scalar_one() > 0
+
     if loaded:
         print("records already loaded; starting")
         return
+
     print("first start: loading the demo chama")
     run_all(config, engine)
     run_score(config, engine)
     add_accounts(config, engine)
 
 
-def laptop_settings(address: str, bundle: Path | None = None, config: dict | None = None) -> dict[str, str]:
+def laptop_settings(
+    address: str,
+    bundle: Path | None = None,
+    config: dict | None = None,
+) -> dict[str, str]:
     """The release on this laptop behind a tunnel (D-034): its own database, only
     the chamas marked `release: true` and its own key, so chama B's own records
     (the ones the model learned from) are out of its reach."""
     address = address.strip().rstrip("/").lower()
     if not re.fullmatch(r"https://[a-z0-9.-]+", address):
-        raise StepFailed(f"{address!r} is not the tunnel's https address, for example https://name.ngrok-free.app")
+        raise StepFailed(
+            f"{address!r} is not the tunnel's https address, "
+            "for example https://name.ngrok-free.app"
+        )
+
     from chama.config import load_config
 
-    needed = ("CLOUD_PSEUDONYM_KEY", "RELEASE_OFFICIAL_EMAIL", "RELEASE_MEMBER_EMAIL", "GROQ_API_KEY", "SUPABASE_URL",
-              "SUPABASE_PUBLISHABLE_KEY")
-    if os.getenv("TWO_STEP_FOR_OFFICIALS", "true").strip().lower() not in ("0", "false", "no", "off"):
-        needed += ("RELEASE_OFFICIAL_PHONE",)    # the treasurer's code is texted there (D-037)
+    needed = (
+        "CLOUD_PSEUDONYM_KEY",
+        "RELEASE_OFFICIAL_EMAIL",
+        "RELEASE_MEMBER_EMAIL",
+        "GROQ_API_KEY",
+        "SUPABASE_URL",
+        "SUPABASE_PUBLISHABLE_KEY",
+    )
     missing = [name for name in needed if not os.getenv(name, "").strip()]
     if missing:
         raise StepFailed(f"Add to .env first: {', '.join(missing)} (see docs/deployment.md).")
+
     bundle = Path(bundle or PROJECT_ROOT / "data" / "deploy" / "bundle")
     if not (bundle / "model" / "champion.json").exists():
         raise StepFailed("Build the bundle first: python -m chama.pipeline deploy-bundle")
+
     only = ",".join(release_chamas(config or load_config()))
-    return {"POSTGRES_DB": LAPTOP_DB, "CHAMA_ONLY": only, "PSEUDONYM_KEY": os.environ["CLOUD_PSEUDONYM_KEY"].strip(),
-            "MODEL_BUNDLE": str(bundle / "model"), "WEB_ORIGINS": f"{address},http://localhost:3000",
-            "COOKIE_SECURE": "true", "DRIVE_DIR": "", "WEB_LOG_DIR": str(PROJECT_ROOT / "data" / "logs" / "release")}
+    return {
+        "POSTGRES_DB": LAPTOP_DB,
+        "CHAMA_ONLY": only,
+        "PSEUDONYM_KEY": os.environ["CLOUD_PSEUDONYM_KEY"].strip(),
+        "MODEL_BUNDLE": str(bundle / "model"),
+        "WEB_ORIGINS": f"{address},http://localhost:3000",
+        "COOKIE_SECURE": "true",
+        "DRIVE_DIR": "",
+        "WEB_LOG_DIR": str(PROJECT_ROOT / "data" / "logs" / "release"),
+    }
 
 
 def _ensure_laptop_database(fresh: bool) -> None:
@@ -232,24 +309,37 @@ def _ensure_laptop_database(fresh: bool) -> None:
 
     print("Starting the database")
     try:
-        # Output is not captured: on Windows a pipe left open by Docker would outlast the time limit
-        done = subprocess.run(["docker", "compose", "up", "-d"], cwd=PROJECT_ROOT, stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL, check=False, timeout=180)
+        done = subprocess.run(
+            ["docker", "compose", "up", "-d"],
+            cwd=PROJECT_ROOT,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            timeout=180,
+        )
     except subprocess.TimeoutExpired as e:
-        raise StepFailed("Docker did not answer within 3 minutes. Restart the laptop, then try again.") from e
+        raise StepFailed(
+            "Docker did not answer within 3 minutes. Restart the laptop, then try again."
+        ) from e
+
     if done.returncode:
         raise StepFailed("The database did not start. Is Docker Desktop running? Try: docker compose up -d")
+
     admin = create_engine(database_url(), isolation_level="AUTOCOMMIT")
     for _ in range(30):
         try:
             with admin.connect() as conn:
                 if fresh:
                     conn.execute(text(f"DROP DATABASE IF EXISTS {LAPTOP_DB} WITH (FORCE)"))
-                if not conn.execute(text("SELECT 1 FROM pg_database WHERE datname = :d"), {"d": LAPTOP_DB}).first():
+                if not conn.execute(
+                    text("SELECT 1 FROM pg_database WHERE datname = :d"),
+                    {"d": LAPTOP_DB},
+                ).first():
                     conn.execute(text(f"CREATE DATABASE {LAPTOP_DB}"))
             return
         except OperationalError:
             time.sleep(2)
+
     raise StepFailed("The database did not answer within a minute.")
 
 
@@ -257,12 +347,18 @@ def _reset_demo_files(demo_id: str = "chama_demo") -> None:
     """Back to the bundle's starting state: no scanned pages, their photos or names learned from them."""
     for scan in (PROJECT_ROOT / "data" / "raw" / demo_id / "scans").glob("scan-*.xlsx"):
         scan.unlink()
-    photos = PROJECT_ROOT / (os.getenv("PHOTO_DIR", "").strip() or "data/interim/uploads") / demo_id
+
+    photos = PROJECT_ROOT / (
+        os.getenv("PHOTO_DIR", "").strip() or "data/interim/uploads"
+    ) / demo_id
     for photo in photos.glob("*.jpg"):
         photo.unlink()
+
     names = f"aliases_{demo_id}.csv"
-    shutil.copy2(PROJECT_ROOT / "data" / "deploy" / "bundle" / "data" / "interim" / names,
-                 PROJECT_ROOT / "data" / "interim" / names)
+    shutil.copy2(
+        PROJECT_ROOT / "data" / "deploy" / "bundle" / "data" / "interim" / names,
+        PROJECT_ROOT / "data" / "interim" / names,
+    )
 
 
 def serve_on_laptop(address: str, fresh: bool = False) -> None:
@@ -279,12 +375,13 @@ def serve_on_laptop(address: str, fresh: bool = False) -> None:
             probe.settimeout(1)
             if probe.connect_ex(("127.0.0.1", port)) == 0:
                 raise StepFailed(f"Port {port} is in use. Stop the server using it first.")
+
     _ensure_laptop_database(fresh)
     if fresh:
         _reset_demo_files()
+
     os.environ.update(settings)
 
-    # Loading the demo chama writes the quality report; the laptop's own stays as it was
     report = PROJECT_ROOT / "data" / "processed" / "quality_report.csv"
     kept = report.read_bytes() if report.exists() else None
     try:
@@ -295,30 +392,63 @@ def serve_on_laptop(address: str, fresh: bool = False) -> None:
 
     frontend = PROJECT_ROOT / "frontend"
     print("Building the pages")
-    built = subprocess.run([shutil.which("npm") or "npm", "run", "build"], cwd=frontend, capture_output=True, check=False)
+    built = subprocess.run(
+        [shutil.which("npm") or "npm", "run", "build"],
+        cwd=frontend,
+        capture_output=True,
+        check=False,
+    )
     if built.returncode:
         raise StepFailed("The pages did not build. Run npm run build in frontend/ to see why.")
+
     children = [
-        subprocess.Popen([sys.executable, "-m", "uvicorn", "chama.web.app:app", "--host", "127.0.0.1", "--port", "8000"],
-                         cwd=PROJECT_ROOT),
+        subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "chama.web.app:app",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "8000",
+            ],
+            cwd=PROJECT_ROOT,
+        ),
         subprocess.Popen([sys.executable, "-m", "chama.web.worker"], cwd=PROJECT_ROOT),
-        subprocess.Popen([shutil.which("node") or "node", "node_modules/next/dist/bin/next", "start",
-                          "--hostname", "127.0.0.1", "--port", "3000"], cwd=frontend),
+        subprocess.Popen(
+            [
+                shutil.which("node") or "node",
+                "node_modules/next/dist/bin/next",
+                "start",
+                "--hostname",
+                "127.0.0.1",
+                "--port",
+                "3000",
+            ],
+            cwd=frontend,
+        ),
     ]
+
     ready = False
     try:
         while all(child.poll() is None for child in children):
             time.sleep(3)
             if not ready:
                 try:
-                    # The API first: until it is up, the pages would log every failed check
-                    ready = all(httpx.get(f"http://127.0.0.1:{port}/api/health", timeout=3).status_code == 200
-                                for port in (8000, 3000))
+                    ready = all(
+                        httpx.get(f"http://127.0.0.1:{port}/api/health", timeout=3).status_code == 200
+                        for port in (8000, 3000)
+                    )
                 except httpx.HTTPError:
                     continue
+
                 if ready:
-                    print(f"\nReady. Kibaba is at {address.strip().rstrip('/').lower()}\n"
-                          "Keep this window and the tunnel's window open. Ctrl+C here stops it.")
+                    print(
+                        f"\nReady. Kibaba is at {address.strip().rstrip('/').lower()}\n"
+                        "Keep this window and the tunnel's window open. Ctrl+C here stops it."
+                    )
+
         raise StepFailed("A part of the release stopped; see the messages above.")
     except KeyboardInterrupt:
         print("Stopping")
@@ -327,8 +457,13 @@ def serve_on_laptop(address: str, fresh: bool = False) -> None:
             child.terminate()
 
 
-def publish(ref: str = "main", rebuild: bool = False, api=None, bundle: Path | None = None,
-            config: dict | None = None) -> str:
+def publish(
+    ref: str = "main",
+    rebuild: bool = False,
+    api=None,
+    bundle: Path | None = None,
+    config: dict | None = None,
+) -> str:
     """Create or update the private dataset, the private storage bucket and the
     public Space; return the site's address. The Dockerfile goes up last,
     because that starts the build and the build needs the settings. Safe to run
@@ -338,20 +473,23 @@ def publish(ref: str = "main", rebuild: bool = False, api=None, bundle: Path | N
     from chama.config import load_config
 
     names = PUBLISH_SETTINGS
-    if os.getenv("TWO_STEP_FOR_OFFICIALS", "true").strip().lower() not in ("0", "false", "no", "off"):
-        names += ("RELEASE_OFFICIAL_PHONE",)    # the treasurer's code is texted there (D-037)
     values = {name: os.getenv(name, "").strip() for name in names}
     missing = [name for name, value in values.items() if not value]
     if missing:
         raise StepFailed(f"Add to .env first: {', '.join(missing)} (see docs/deployment.md).")
+
     bundle = Path(bundle or PROJECT_ROOT / "data" / "deploy" / "bundle")
     if not (bundle / "MANIFEST.json").exists():
         raise StepFailed("Build the bundle first: python -m chama.pipeline deploy-bundle")
+
     manifest = json.loads((bundle / "MANIFEST.json").read_text(encoding="utf-8"))
     if manifest.get("real_names") and not manifest.get("hosting_agreed"):
-        raise StepFailed("The bundle holds real names, and the chama's settings do not say its officials agreed "
-                         "to Kibaba holding its records on Hugging Face (hosting: agreed, D-041). It stays on this "
-                         "laptop. If they have agreed, add it in config/pipeline.yaml and build the bundle again.")
+        raise StepFailed(
+            "The bundle holds real names, and the chama's settings do not say its officials agreed "
+            "to Kibaba holding its records on Hugging Face (hosting: agreed, D-041). It stays on this "
+            "laptop. If they have agreed, add it in config/pipeline.yaml and build the bundle again."
+        )
+
     only = ",".join(release_chamas(config or load_config()))
     if api is None:
         from huggingface_hub import HfApi
@@ -362,43 +500,83 @@ def publish(ref: str = "main", rebuild: bool = False, api=None, bundle: Path | N
     dataset, space = f"{owner}/{DATASET_NAME}", f"{owner}/{SPACE_NAME}"
     api.create_repo(dataset, repo_type="dataset", private=True, exist_ok=True)
     if not api.repo_info(dataset, repo_type="dataset").private:
-        raise StepFailed(f"{dataset} is not private on Hugging Face, so nothing was uploaded. Make it private first.")
-    api.upload_folder(folder_path=str(bundle), repo_id=dataset, repo_type="dataset",
-                      commit_message="Demo chama and champion model")
+        raise StepFailed(
+            f"{dataset} is not private on Hugging Face, so nothing was uploaded. Make it private first."
+        )
+
+    api.upload_folder(
+        folder_path=str(bundle),
+        repo_id=dataset,
+        repo_type="dataset",
+        commit_message="Demo chama and champion model",
+    )
 
     api.create_repo(space, repo_type="space", space_sdk="docker", private=False, exist_ok=True)
     address = api.space_info(space).host
 
-    # The Space's lasting records: a private bucket, mounted read-write at /data (buckets start public)
     bucket = f"{owner}/{BUCKET_NAME}"
     api.create_bucket(bucket, private=True, exist_ok=True)
     if not api.bucket_info(bucket).private:
-        raise StepFailed(f"{bucket} is not private on Hugging Face, so it was not attached. Make it private first.")
-    api.set_space_volumes(space, [Volume(type="bucket", source=bucket, mount_path=MOUNT_PATH)])
+        raise StepFailed(
+            f"{bucket} is not private on Hugging Face, so it was not attached. Make it private first."
+        )
 
-    variables = {"GITHUB_REPO": GITHUB_REPO, "GIT_REF": ref, "BUNDLE_REPO": dataset, "WEB_ORIGINS": address,
-                 "COOKIE_SECURE": "true", "CHAMA_ONLY": only, "BACKUP_DIR": BACKUP_DIR}
-    secrets = {"GITHUB_TOKEN": values["GITHUB_READ_TOKEN"], "HF_TOKEN": values["HF_BUILD_TOKEN"],
-               "PSEUDONYM_KEY": values["CLOUD_PSEUDONYM_KEY"], "GROQ_API_KEY": values["GROQ_API_KEY"],
-               "SUPABASE_URL": values["SUPABASE_URL"], "SUPABASE_PUBLISHABLE_KEY": values["SUPABASE_PUBLISHABLE_KEY"],
-               "RELEASE_OFFICIAL_EMAIL": values["RELEASE_OFFICIAL_EMAIL"],
-               "RELEASE_MEMBER_EMAIL": values["RELEASE_MEMBER_EMAIL"]}
-    for optional in ("RELEASE_OFFICIAL_PHONE", "RELEASE_MEMBER_PHONE", "TWO_STEP_FOR_OFFICIALS",
-                     # texting sign-in codes through Africa's Talking (D-042)
-                     "SMS_HOOK_SECRET", "AFRICASTALKING_USERNAME", "AFRICASTALKING_API_KEY",
-                     "AFRICASTALKING_SENDER_ID"):
+    api.set_space_volumes(
+        space,
+        [Volume(type="bucket", source=bucket, mount_path=MOUNT_PATH)],
+    )
+
+    variables = {
+        "GITHUB_REPO": GITHUB_REPO,
+        "GIT_REF": ref,
+        "BUNDLE_REPO": dataset,
+        "WEB_ORIGINS": address,
+        "COOKIE_SECURE": "true",
+        "CHAMA_ONLY": only,
+        "BACKUP_DIR": BACKUP_DIR,
+    }
+    secrets = {
+        "GITHUB_TOKEN": values["GITHUB_READ_TOKEN"],
+        "HF_TOKEN": values["HF_BUILD_TOKEN"],
+        "PSEUDONYM_KEY": values["CLOUD_PSEUDONYM_KEY"],
+        "GROQ_API_KEY": values["GROQ_API_KEY"],
+        "SUPABASE_URL": values["SUPABASE_URL"],
+        "SUPABASE_PUBLISHABLE_KEY": values["SUPABASE_PUBLISHABLE_KEY"],
+        "RELEASE_OFFICIAL_EMAIL": values["RELEASE_OFFICIAL_EMAIL"],
+        "RELEASE_MEMBER_EMAIL": values["RELEASE_MEMBER_EMAIL"],
+    }
+
+    for optional in (
+        "RELEASE_OFFICIAL_PHONE",
+        "RELEASE_MEMBER_PHONE",
+        "SMS_HOOK_SECRET",
+        "AFRICASTALKING_USERNAME",
+        "AFRICASTALKING_API_KEY",
+        "AFRICASTALKING_SENDER_ID",
+    ):
         if os.getenv(optional, "").strip():
             secrets[optional] = os.environ[optional].strip()
-    for optional in ("MEETING_TEXTS", "MEETING_TEXT_HOUR"):   # the officials' text before each meeting (D-045)
+
+    for optional in ("MEETING_TEXTS", "MEETING_TEXT_HOUR"):
         if os.getenv(optional, "").strip():
             variables[optional] = os.environ[optional].strip()
+
     for key, value in variables.items():
         api.add_space_variable(space, key, value)
+
     for key, value in secrets.items():
         api.add_space_secret(space, key, value)
+
     for name in ("README.md", "Dockerfile"):
-        api.upload_file(path_or_fileobj=str(PROJECT_ROOT / "deploy" / "huggingface" / name), path_in_repo=name,
-                        repo_id=space, repo_type="space", commit_message=f"Kibaba release: {name}")
+        api.upload_file(
+            path_or_fileobj=str(PROJECT_ROOT / "deploy" / "huggingface" / name),
+            path_in_repo=name,
+            repo_id=space,
+            repo_type="space",
+            commit_message=f"Kibaba release: {name}",
+        )
+
     if rebuild:
         api.restart_space(space, factory_reboot=True)
+
     return address

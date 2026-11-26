@@ -42,12 +42,19 @@ class Champion:
 
 
 def files_checksum(folder: Path) -> str:
-    """SHA-256 over every file of a model folder, in name order, so the same
-    model always gives the same checksum."""
+    """SHA-256 over every file in consistent, case-insensitive name order."""
+    folder = Path(folder)
     digest = hashlib.sha256()
-    for path in sorted(p for p in Path(folder).rglob("*") if p.is_file()):
+
+    paths = sorted(
+        (p for p in folder.rglob("*") if p.is_file()),
+        key=lambda p: p.relative_to(folder).as_posix().casefold(),
+    )
+
+    for path in paths:
         digest.update(path.relative_to(folder).as_posix().encode())
         digest.update(path.read_bytes())
+
     return digest.hexdigest()
 
 

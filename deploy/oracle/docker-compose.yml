@@ -1,0 +1,132 @@
+﻿services:
+  postgres:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kibaba}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-kibaba}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app
+
+  init:
+    build:
+      context: ../..
+      dockerfile: deploy/oracle/Dockerfile
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      BACKUP_DIR: /app/data/persistent
+      PHOTO_DIR: /app/data/persistent/uploads
+      MODEL_BUNDLE: /release/model
+      WEB_LOG_DIR: /app/data/persistent/logs
+      DEMO_MODE: "false"
+    volumes:
+      - ${KIBABA_DATA_DIR:-/opt/kibaba/data}:/app/data
+      - ${KIBABA_RELEASE_DIR:-/opt/kibaba/release}:/release:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/usr/local/bin/kibaba-init"]
+    networks:
+      - app
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/oracle/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      BACKUP_DIR: /app/data/persistent
+      PHOTO_DIR: /app/data/persistent/uploads
+      MODEL_BUNDLE: /release/model
+      WEB_LOG_DIR: /app/data/persistent/logs
+      DEMO_MODE: "false"
+    volumes:
+      - ${KIBABA_DATA_DIR:-/opt/kibaba/data}:/app/data
+      - ${KIBABA_RELEASE_DIR:-/opt/kibaba/release}:/release:ro
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    command: ["uvicorn", "chama.web.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    networks:
+      - app
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/oracle/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      BACKUP_DIR: /app/data/persistent
+      PHOTO_DIR: /app/data/persistent/uploads
+      MODEL_BUNDLE: /release/model
+      WEB_LOG_DIR: /app/data/persistent/logs
+      DEMO_MODE: "false"
+    volumes:
+      - ${KIBABA_DATA_DIR:-/opt/kibaba/data}:/app/data
+      - ${KIBABA_RELEASE_DIR:-/opt/kibaba/release}:/release:ro
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    command: ["python", "-m", "chama.web.worker"]
+    networks:
+      - app
+
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile.oracle
+    restart: unless-stopped
+    depends_on:
+      - api
+    networks:
+      - app
+      - edge
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+    networks:
+      - edge
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  app:
+  edge:
+
+
