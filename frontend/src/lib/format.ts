@@ -7,10 +7,29 @@ export function money(value: number | null | undefined): string {
   return `KSh ${ksh.format(Math.round(value))}`;
 }
 
-const dayFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric" });
-const monthFormat = new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" });
-const shortMonth = new Intl.DateTimeFormat("en-GB", { month: "short" });
-const timeFormat = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+const dayFormat = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Africa/Nairobi",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+});
+
+const monthFormat = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Africa/Nairobi",
+  month: "long",
+  year: "numeric",
+});
+
+const shortMonth = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Africa/Nairobi",
+  month: "short",
+});
+
+const timeFormat = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Africa/Nairobi",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 
 function asDate(value: string): Date {
   // "2026-04-01" is a calendar date: read it at noon so no time zone moves it a day
